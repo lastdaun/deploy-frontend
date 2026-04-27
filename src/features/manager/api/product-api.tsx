@@ -8,7 +8,7 @@ export const productApi = {
     return response.data as { result: Product[] };
   },
 
-  create: async ({ productData, files, modelFile }: { productData: any; files?: File[]; modelFile?: File | null }) => {
+  create: async ({ productData, files }: { productData: any; files?: File[]; modelFile?: File | null }) => {
     const formData = new FormData();
 
     // 1. Trích xuất và ép kiểu các trường

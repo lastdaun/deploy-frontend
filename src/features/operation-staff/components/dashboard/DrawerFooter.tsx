@@ -17,8 +17,6 @@ interface DrawerFooterProps {
 }
 
 const DrawerFooter: React.FC<DrawerFooterProps> = ({
-  onStartProduction,
-  onCompleteProcessing,
   onReadyToShip,
   isProcessing = false,
   orderStatus,

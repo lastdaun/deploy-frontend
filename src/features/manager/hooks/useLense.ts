@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { lensApi } from '../api/lens-api';
-import type { CreateLensRequest, LensProduct } from '../types/lens';
+import type { CreateLensRequest } from '../types/lens';
 import { toast } from 'sonner';
 
 export const useLenses = () => {

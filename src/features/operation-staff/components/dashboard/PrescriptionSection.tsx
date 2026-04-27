@@ -61,14 +61,14 @@ const PrescriptionSection: React.FC<PrescriptionSectionProps> = ({
                 </td>
                 <td className="py-6 px-4">
                   <span className="font-mono text-4xl lg:text-5xl font-bold text-slate-900 dark:text-white tracking-tighter">
-                    {prescription?.odSphere >= 0 ? '+' : ''}
-                    {prescription?.odSphere?.toFixed(2) || 0}
+                    {(prescription?.odSphere ?? 0) >= 0 ? '+' : ''}
+                    {(prescription?.odSphere ?? 0).toFixed(2)}
                   </span>
                 </td>
                 <td className="py-6 px-4">
                   <span className="font-mono text-4xl lg:text-5xl font-bold text-slate-900 dark:text-white tracking-tighter">
-                    {prescription?.odCylinder >= 0 ? '+' : ''}
-                    {prescription?.odCylinder?.toFixed(2) || 0}
+                    {(prescription?.odCylinder ?? 0) >= 0 ? '+' : ''}
+                    {(prescription?.odCylinder ?? 0).toFixed(2)}
                   </span>
                 </td>
                 <td className="py-6 px-4">
@@ -78,8 +78,8 @@ const PrescriptionSection: React.FC<PrescriptionSectionProps> = ({
                 </td>
                 <td className="py-6 px-4">
                   <span className="font-mono text-4xl lg:text-5xl font-bold text-slate-900 dark:text-white tracking-tighter text-green-600 dark:text-green-400">
-                    {prescription?.odAdd >= 0 ? '+' : ''}
-                    {prescription?.odAdd?.toFixed(2) || 0}
+                    {(prescription?.odAdd ?? 0) >= 0 ? '+' : ''}
+                    {(prescription?.odAdd ?? 0).toFixed(2)}
                   </span>
                 </td>
                 <td className="py-6 px-4 bg-slate-50/50 dark:bg-slate-800/20">
@@ -99,14 +99,14 @@ const PrescriptionSection: React.FC<PrescriptionSectionProps> = ({
                 </td>
                 <td className="py-6 px-4">
                   <span className="font-mono text-4xl lg:text-5xl font-bold text-slate-900 dark:text-white tracking-tighter">
-                    {prescription?.osSphere >= 0 ? '+' : ''}
-                    {prescription?.osSphere?.toFixed(2) || 0}
+                    {(prescription?.osSphere ?? 0) >= 0 ? '+' : ''}
+                    {(prescription?.osSphere ?? 0).toFixed(2)}
                   </span>
                 </td>
                 <td className="py-6 px-4">
                   <span className="font-mono text-4xl lg:text-5xl font-bold text-slate-900 dark:text-white tracking-tighter">
-                    {prescription?.osCylinder >= 0 ? '+' : ''}
-                    {prescription?.osCylinder?.toFixed(2) || 0}
+                    {(prescription?.osCylinder ?? 0) >= 0 ? '+' : ''}
+                    {(prescription?.osCylinder ?? 0).toFixed(2)}
                   </span>
                 </td>
                 <td className="py-6 px-4">
@@ -116,8 +116,8 @@ const PrescriptionSection: React.FC<PrescriptionSectionProps> = ({
                 </td>
                 <td className="py-6 px-4">
                   <span className="font-mono text-4xl lg:text-5xl font-bold text-slate-900 dark:text-white tracking-tighter text-green-600 dark:text-green-400">
-                    {prescription?.osAdd >= 0 ? '+' : ''}
-                    {prescription?.osAdd?.toFixed(2) || 0}
+                    {(prescription?.osAdd ?? 0) >= 0 ? '+' : ''}
+                    {(prescription?.osAdd ?? 0).toFixed(2)}
                   </span>
                 </td>
                 <td className="py-6 px-4 bg-slate-50/50 dark:bg-slate-800/20">

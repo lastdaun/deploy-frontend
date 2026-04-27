@@ -136,10 +136,6 @@ const ShipperDashboardPage: React.FC = () => {
     [activeOrderId, confirmDelivered],
   );
 
-  const goToDeliveryList = useCallback(() => {
-    setScreen('list');
-  }, []);
-
   const handleRetry = useCallback(() => {
     clearError();
     if (screen === 'list') {
