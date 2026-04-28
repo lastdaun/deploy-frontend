@@ -94,22 +94,6 @@ export default function LoginForm() {
           </Button>
         </div>
 
-        {/* Extra Links */}
-        <div className="flex justify-between items-center px-2 text-[12px] text-gray-400 font-bold tracking-wider uppercase mt-4">
-          <a
-            href="#"
-            className="hover:text-zinc-900 transition-colors border-b border-transparent hover:border-zinc-900"
-          >
-            Quên mật khẩu
-          </a>
-          <a
-            href="#"
-            className="hover:text-zinc-900 transition-colors border-b border-transparent hover:border-zinc-900"
-          >
-            Chính sách bảo mật
-          </a>
-        </div>
-
         {/* FOOTER */}
         <div className="relative mt-10 pt-10 border-t border-gray-100">
           <p className="text-center text-base text-gray-500">

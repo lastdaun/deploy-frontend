@@ -13,11 +13,6 @@ const Footer: React.FC = () => {
             Đổi mới ngành kính mắt từ năm 2012. Chúng tôi kết hợp tay nghề thủ công tinh xảo với
             công nghệ số hiện đại để mang đến trải nghiệm quang học tốt nhất cho bạn.
           </p>
-
-          <div style={styles.social}>
-            <button style={styles.iconBtn}>🌐</button>
-            <button style={styles.iconBtn}>🔗</button>
-          </div>
         </div>
 
         {/* Shop */}
@@ -31,25 +26,25 @@ const Footer: React.FC = () => {
           </ul>
         </div>
 
-        {/* Support */}
-        <div style={styles.column}>
-          <h4 style={styles.title}>HỖ TRỢ</h4>
-          <ul style={styles.list}>
-            <li>Theo dõi đơn hàng</li>
-            <li>Đổi / Trả hàng</li>
-            <li>Tìm cửa hàng</li>
-            <li>Trung tâm trợ giúp</li>
-          </ul>
-        </div>
-
-        {/* Legal */}
-        <div style={styles.column}>
-          <h4 style={styles.title}>PHÁP LÝ</h4>
-          <ul style={styles.list}>
-            <li>Chính sách bảo mật</li>
-            <li>Điều khoản sử dụng</li>
-            <li>Khả năng truy cập</li>
-          </ul>
+        {/* Support & legal */}
+        <div style={styles.supportLegalRow}>
+          <div style={styles.column}>
+            <h4 style={styles.title}>HỖ TRỢ</h4>
+            <ul style={styles.list}>
+              <li>Theo dõi đơn hàng</li>
+              <li>Đổi / Trả hàng</li>
+              <li>Tìm cửa hàng</li>
+              <li>Trung tâm trợ giúp</li>
+            </ul>
+          </div>
+          <div style={styles.column}>
+            <h4 style={styles.title}>PHÁP LÝ</h4>
+            <ul style={styles.list}>
+              <li>Chính sách bảo mật</li>
+              <li>Điều khoản sử dụng</li>
+              <li>Khả năng truy cập</li>
+            </ul>
+          </div>
         </div>
       </div>
     </footer>
@@ -66,8 +61,15 @@ const styles: { [key: string]: React.CSSProperties } = {
   },
   container: {
     display: 'grid',
-    gridTemplateColumns: '2fr 1fr 1fr 1fr',
+    gridTemplateColumns: '2fr 1fr minmax(280px, 1.4fr)',
     gap: '40px',
+    alignItems: 'start',
+  },
+  supportLegalRow: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: '32px 48px',
+    justifyContent: 'flex-start',
   },
   column: {
     display: 'flex',
@@ -92,19 +94,6 @@ const styles: { [key: string]: React.CSSProperties } = {
     lineHeight: '1.6',
     color: '#6b7280',
     maxWidth: '300px',
-  },
-  social: {
-    display: 'flex',
-    gap: '12px',
-    marginTop: '8px',
-  },
-  iconBtn: {
-    width: '36px',
-    height: '36px',
-    borderRadius: '50%',
-    border: '1px solid #d1d5db',
-    background: '#ffffff',
-    cursor: 'pointer',
   },
   title: {
     fontSize: '14px',

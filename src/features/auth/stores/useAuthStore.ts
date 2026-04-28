@@ -77,13 +77,8 @@ export const useAuthStore = create<AuthStore>()(
             isLoading: false,
           });
 
-          // Refetch profile + thông báo sau khi đổi tài khoản
           queryClient.invalidateQueries({
             queryKey: PROFILE_QUERY_KEY,
-            refetchType: 'all',
-          });
-          queryClient.invalidateQueries({
-            queryKey: ['notifications'],
             refetchType: 'all',
           });
         } catch (error) {

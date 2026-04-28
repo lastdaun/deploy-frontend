@@ -105,30 +105,6 @@ export default function ManagerOrderPage() {
         <OrderDetailModal
           order={selectedOrder}
           onClose={() => setSelectedOrder(null)}
-          extraFooter={
-            selectedOrder.orderStatus === 'STOCK_REQUESTED' ? (
-              <Button
-                disabled={actionLoading}
-                onClick={async () => {
-                  setActionLoading(true);
-                  try {
-                    await orderApi.markStockReady(selectedOrder.orderId);
-                    toast.success('Đã xác nhận hàng sẵn sàng');
-                    setSelectedOrder(null);
-                    queryClient.invalidateQueries({ queryKey: ['orders'] });
-                  } catch (error) {
-                    console.error('Mark stock ready error:', error);
-                    toast.error('Không thể cập nhật trạng thái hàng');
-                  } finally {
-                    setActionLoading(false);
-                  }
-                }}
-                className="w-full bg-cyan-600 hover:bg-cyan-700"
-              >
-                {actionLoading ? 'Đang xử lý...' : 'Xác nhận hàng đã sẵn sàng'}
-              </Button>
-            ) : undefined
-          }
         />
       )}
 
