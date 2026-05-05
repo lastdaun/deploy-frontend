@@ -17,6 +17,8 @@ interface ProductionStore {
   requestStock: (orderId: string) => Promise<void>;
   startOrder: (orderId: string) => Promise<void>;
   finishOrder: (orderId: string) => Promise<void>;
+  reportOperationalHold: (orderId: string, reason: string) => Promise<void>;
+  resumeFromOperationalHold: (orderId: string) => Promise<void>;
   readyToShip: (orderId: string) => Promise<void>;
   updateItemStatus: (orderItemId: string, status: string) => Promise<void>;
   startPackaging: (orderId: string) => Promise<void>;
@@ -118,6 +120,48 @@ export const useProductionStore = create<ProductionStore>()(
             loading: false,
           });
           toast.error(errMsg(error, 'Không thể cập nhật sau sản xuất.'));
+        }
+      },
+
+      reportOperationalHold: async (orderId: string, reason: string) => {
+        set({ loading: true, error: null });
+        try {
+          const updatedOrder = await productionApi.reportOperationalHold(orderId, reason);
+          set((state) => ({
+            processingOrders: state.processingOrders.map((order) =>
+              order.orderId === orderId ? updatedOrder : order,
+            ),
+            loading: false,
+          }));
+          toast.success('Đã chuyển đơn sang tạm giữ (ON_HOLD).');
+        } catch (error) {
+          set({
+            error: error instanceof Error ? error.message : 'Failed to report hold',
+            loading: false,
+          });
+          toast.error(errMsg(error, 'Không thể tạm giữ đơn.'));
+          throw error;
+        }
+      },
+
+      resumeFromOperationalHold: async (orderId: string) => {
+        set({ loading: true, error: null });
+        try {
+          const updatedOrder = await productionApi.resumeFromOperationalHold(orderId);
+          set((state) => ({
+            processingOrders: state.processingOrders.map((order) =>
+              order.orderId === orderId ? updatedOrder : order,
+            ),
+            loading: false,
+          }));
+          toast.success('Đơn đã được tiếp tục xử lý.');
+        } catch (error) {
+          set({
+            error: error instanceof Error ? error.message : 'Failed to resume',
+            loading: false,
+          });
+          toast.error(errMsg(error, 'Không thể gỡ tạm giữ.'));
+          throw error;
         }
       },
 

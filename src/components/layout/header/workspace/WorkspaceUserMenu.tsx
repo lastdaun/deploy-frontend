@@ -1,4 +1,4 @@
-import { LogOut, User, Settings, ChevronDown } from 'lucide-react';
+import { LogOut, User, Settings, ChevronDown, LayoutDashboard } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   DropdownMenu,
@@ -58,6 +58,13 @@ export function WorkspaceUserMenu() {
         <DropdownMenuSeparator />
 
         {/* 👇 ĐÃ SỬA: Thêm onClick để điều hướng tới trang Profile */}
+        {user?.role === 'manager' && (
+          <DropdownMenuItem className="cursor-pointer" onClick={() => navigate('/manager/dashboard')}>
+            <LayoutDashboard className="mr-2 h-4 w-4" />
+            <span>Dashboard</span>
+          </DropdownMenuItem>
+        )}
+
         <DropdownMenuItem className="cursor-pointer" onClick={() => navigate('/profile')}>
           <User className="mr-2 h-4 w-4" />
           <span>Hồ sơ cá nhân</span>

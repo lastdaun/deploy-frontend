@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { PackageOpen, AlertCircle, ShoppingBag, RefreshCcw, ChevronLeft, ChevronRight } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
+import { PackageOpen, AlertCircle, ShoppingBag, RefreshCcw, ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
 
 import {
   Select,
@@ -13,17 +14,20 @@ import { Button } from "@/components/ui/button";
 
 import { profileApi } from '../api/api';
 import type { BEFeedback } from "@/features/profile/types";
-import FeedbackModal from "@/features/profile/components/feedback/FeedbackModal.tsx";
 import FeedbackPreview from "@/features/profile/components/feedback/FeedbackPreview.tsx";
 
 import { useMyOrders } from '../hooks/useMyOrders';
+import { orderApi } from '../api/order-api';
 import type { Order, OrderItem } from '../types/order';
 import { fmt } from '@/lib/utils';
-import { notifyError, notifySuccess } from '@/lib/notifyError';
-import { effectivePrescriptionImageUrl } from '@/lib/prescriptionImageUrl';
-import { sortOrdersByCreatedAtDesc } from '@/lib/orderSort';
+import { notifyError, notifySuccess, notifyInfo } from '@/lib/notifyError';
+import { effectivePrescriptionImageUrl, resolvePrescriptionImageUrl } from '@/lib/prescriptionImageUrl';
+import { formatOrderDisplayNameFromOrder } from '@/lib/orderDisplayName';
+import { sortOrdersByCreatedAtDesc, ORDER_LIST_SORT_HINT_NEWEST_FIRST } from '@/lib/orderSort';
+import { formatOrderCreatedAtLabel } from '@/lib/formatOrderCreatedAt';
+import { OrderShippingDetails } from '@/components/order/OrderShippingDetails';
 import { STATUS_CONFIG } from '@/features/manager/types/order-type';
-import { getOrderStatusForShopDisplay, orderHasPreorderItem } from '@/features/seller/utils/orderGuards';
+import { getOrderStatusForShopDisplay } from '@/features/seller/utils/orderGuards';
 
 function customerOrderStatusBadge(statusRaw: string) {
   const statusKey = (statusRaw || '').toUpperCase();
@@ -43,10 +47,14 @@ function customerOrderStatusBadge(statusRaw: string) {
 }
 
 const ITEM_STATUS: Record<string, string> = {
-  IN_PRODUCTION: 'Đang sản xuất',
-  PRODUCED: 'Đã sản xuất',
   PENDING: 'Chờ xác nhận',
 };
+
+/** Chỉ hiện nút hủy cho đơn ở các trạng thái raw từ BE (Chờ xác nhận / Đã thanh toán). */
+const CUSTOMER_CANCEL_ORDER_STATUSES = new Set(['PENDING', 'PAID']);
+
+/** Không hiển thị label trạng thái từng dòng cho các mã này (giao diện chỉ giữ badge Đặt trước / Hàng có sẵn). */
+const HIDE_LINE_ITEM_STATUS = new Set(['IN_PRODUCTION', 'PRODUCED']);
 
 // ─── PrescriptionImage ────────────────────────────────────────────────────────
 
@@ -102,20 +110,32 @@ function PrescriptionImage({ prescription }: { prescription: { imageUrl?: string
 
 function OrderItemCard({
   item,
-  orderName,
+  orderDisplayLabel,
 }: {
   item: OrderItem;
   index: number;
   total: number;
-  orderName?: string | null;
+  /** Tên đơn hiển thị thống nhất: ORDER|PREORDER - sản phẩm (+ Lens) - mã ngắn — xem `formatOrderDisplayNameFromOrder` */
+  orderDisplayLabel: string;
   orderStatus: string;
   orderId: string;
 }) {
   const productLabel =
     item.productName ||
     item.itemName ||
-    orderName ||
+    orderDisplayLabel ||
     (item.orderItemType === 'PRE_ORDER' ? 'Sản phẩm đặt trước' : 'Sản phẩm có sẵn');
+
+  const qty = Math.max(1, Number(item.quantity) || 1);
+  const frameUnit = Number(item.unitPrice) || 0;
+  const lensUnit = Number(item.lensPrice) || 0;
+  const lensTotalExplicit =
+    item.lensPriceTotal != null && !Number.isNaN(Number(item.lensPriceTotal))
+      ? Number(item.lensPriceTotal)
+      : lensUnit * qty;
+  const frameTotal = frameUnit * qty;
+  const hasLens = Boolean(item.lensName?.trim()) || lensUnit > 0 || lensTotalExplicit > 0;
+  const lineTotal = Number(item.totalPrice) || frameTotal + (hasLens ? lensTotalExplicit : 0);
 
   return (
     <div className="bg-white border border-gray-100 rounded-xl p-4 space-y-3">
@@ -127,37 +147,72 @@ function OrderItemCard({
             >
               {item.orderItemType === 'PRE_ORDER' ? 'Đặt trước' : 'Hàng có sẵn'}
             </span>
-            {item.status && (
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-teal-100 text-teal-700 font-semibold">
-                {ITEM_STATUS[item.status] ?? item.status}
-              </span>
-            )}
+            {item.status &&
+              !HIDE_LINE_ITEM_STATUS.has(
+                String(item.status).trim().toUpperCase().replace(/-/g, '_'),
+              ) && (
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-teal-100 text-teal-700 font-semibold">
+                  {ITEM_STATUS[item.status] ?? item.status}
+                </span>
+              )}
           </div>
           <p className="text-sm font-semibold text-gray-800">{productLabel}</p>
           {item.variantName && (
             <p className="text-xs text-gray-500 mt-0.5">🏷️ {item.variantName}</p>
           )}
-          {item.lensName && item.lensPrice != null && (
-            <p className="text-xs text-indigo-500 mt-0.5">
-              🔭 {item.lensName} &nbsp;+&nbsp; {fmt(item.lensPrice)}
+          {item.lensName && (
+            <p className="text-xs text-indigo-600 mt-0.5 font-medium">
+              🔭 Tròng:&nbsp;
+              <span>{item.lensName}</span>
             </p>
           )}
         </div>
-        <p className="text-sm font-bold text-gray-800 shrink-0">{fmt(item.totalPrice)}</p>
+        <p className="text-sm font-bold text-gray-800 shrink-0">{fmt(lineTotal)}</p>
       </div>
 
-      <div className="grid grid-cols-3 gap-2 text-sm">
-        <div className="bg-gray-50 rounded-lg p-2 text-center">
-          <p className="text-[10px] text-gray-400 mb-0.5">Số lượng</p>
-          <p className="font-semibold text-gray-700">{item.quantity}</p>
+      <div className="rounded-xl border border-gray-100 bg-slate-50/60 overflow-hidden text-sm">
+        <div className="px-3 py-2 bg-white/80 border-b border-gray-100 flex items-center justify-between gap-2">
+          <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+            Số lượng
+          </span>
+          <span className="text-base font-bold text-gray-900 tabular-nums">{qty}</span>
         </div>
-        <div className="bg-gray-50 rounded-lg p-2 text-center">
-          <p className="text-[10px] text-gray-400 mb-0.5">Đơn giá</p>
-          <p className="font-semibold text-gray-700 text-xs">{fmt(item.unitPrice)}</p>
+
+        <div className="divide-y divide-gray-100/90">
+          <div className="px-3 py-2.5 space-y-1">
+            <p className="text-[11px] font-semibold text-slate-500">Gọng</p>
+            <div className="flex justify-between gap-2 text-xs text-gray-600">
+              <span>Đơn giá</span>
+              <span className="font-medium tabular-nums">{fmt(frameUnit)}</span>
+            </div>
+            <div className="flex justify-between gap-2 text-xs">
+              <span className="text-gray-600">Thành tiền</span>
+              <span className="font-semibold text-gray-900 tabular-nums">{fmt(frameTotal)}</span>
+            </div>
+          </div>
+
+          {hasLens ? (
+            <div className="px-3 py-2.5 space-y-1 bg-indigo-50/35">
+              <p className="text-[11px] font-semibold text-indigo-700">Tròng</p>
+              <div className="flex justify-between gap-2 text-xs text-gray-700">
+                <span>Đơn giá</span>
+                <span className="font-medium tabular-nums">{fmt(lensUnit)}</span>
+              </div>
+              <div className="flex justify-between gap-2 text-xs">
+                <span className="text-gray-700">Thành tiền</span>
+                <span className="font-semibold text-indigo-900 tabular-nums">
+                  {fmt(lensTotalExplicit)}
+                </span>
+              </div>
+            </div>
+          ) : null}
         </div>
-        <div className="bg-indigo-50 rounded-lg p-2 text-center">
-          <p className="text-[10px] text-indigo-400 mb-0.5">Thành tiền</p>
-          <p className="font-bold text-indigo-700 text-xs">{fmt(item.totalPrice)}</p>
+
+        <div className="px-3 py-2.5 bg-indigo-50 border-t border-indigo-100/80 flex items-center justify-between gap-2">
+          <span className="text-xs font-bold text-indigo-950">
+            {hasLens ? 'Tổng (gọng + tròng)' : 'Thành tiền'}
+          </span>
+          <span className="text-sm font-black text-indigo-800 tabular-nums">{fmt(lineTotal)}</span>
         </div>
       </div>
 
@@ -203,17 +258,61 @@ function OrderItemCard({
   );
 }
 
-// ─── OrderCard ────────────────────────────────────────────────────────────────
+/** Lý do hủy đơn — hiển thị & gửi nguyên văn lên BE (query `reason`). */
+type CustomerCancelReasonId = 'wrong_info' | 'changed_mind' | 'price' | 'other';
 
-function OrderCard({ order, allFeedbacks }: { order: Order, allFeedbacks: BEFeedback[] }) {
-  const [expanded, setExpanded] = useState(false);
+const CUSTOMER_CANCEL_REASONS: {
+  id: CustomerCancelReasonId;
+  label: string;
+  /** Chuỗi lưu khi không phải "Khác" */
+  presetForApi: string;
+}[] = [
+  {
+    id: 'wrong_info',
+    label: 'Đặt nhầm / sai thông tin',
+    presetForApi: 'Đặt nhầm / sai thông tin',
+  },
+  {
+    id: 'changed_mind',
+    label: 'Đổi ý (Không còn nhu cầu mua, muốn chọn sản phẩm khác)',
+    presetForApi: 'Đổi ý (Không còn nhu cầu mua, muốn chọn sản phẩm khác)',
+  },
+  {
+    id: 'price',
+    label: 'Giá tiền không phù hợp',
+    presetForApi: 'Giá tiền không phù hợp',
+  },
+  {
+    id: 'other',
+    label: 'Khác (cho nhập lý do vào ô)',
+    presetForApi: '',
+  },
+];
+
+function buildCustomerCancelApiReason(kind: CustomerCancelReasonId, otherText: string): string {
+  if (kind === 'other') return otherText.trim();
+  const row = CUSTOMER_CANCEL_REASONS.find((r) => r.id === kind);
+  return row?.presetForApi ?? '';
+}
+
+function OrderCard({
+  order,
+  allFeedbacks,
+  defaultExpanded = false,
+  highlighted = false,
+}: {
+  order: Order;
+  allFeedbacks: BEFeedback[];
+  defaultExpanded?: boolean;
+  highlighted?: boolean;
+}) {
+  const [expanded, setExpanded] = useState(defaultExpanded);
   const [cancelling, setCancelling] = useState(false);
+  const [completing, setCompleting] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [cancelReasonId, setCancelReasonId] = useState<CustomerCancelReasonId>('wrong_info');
+  const [cancelOtherText, setCancelOtherText] = useState('');
   const queryClient = useQueryClient();
-
-  const [feedbackModalOpen, setFeedbackModalOpen] = useState(false);
-  const [selectedItem, setSelectedItem] = useState<OrderItem | null>(null);
-  const [selectedFeedback, setSelectedFeedback] = useState<BEFeedback | null>(null);
 
   // Lấy feedback của toàn bộ đơn hàng
   const orderFeedback = allFeedbacks.find(f => f.orderId === order.orderId) || null;
@@ -222,16 +321,52 @@ function OrderCard({ order, allFeedbacks }: { order: Order, allFeedbacks: BEFeed
   const displayStatus = getOrderStatusForShopDisplay(order);
   const statusCfg = customerOrderStatusBadge(displayStatus);
 
-  const hasPreOrder = orderHasPreorderItem(order);
-  const canCancel =
-    hasPreOrder && !['CANCELLED', 'REFUNDED', 'DELIVERED'].includes(order.orderStatus);
+  const rawStatus = String(order.orderStatus || '')
+    .trim()
+    .toUpperCase();
+  const canCancel = CUSTOMER_CANCEL_ORDER_STATUSES.has(rawStatus);
+  const canComplete = rawStatus === 'DELIVERED';
+  const cancelReasonTrimmed = String(order.cancellationReason ?? '').trim();
+
+  const orderDisplayTitle = formatOrderDisplayNameFromOrder(order);
+  const deliveredImageSrc = resolvePrescriptionImageUrl(order.deliveredImageUrl);
+
+  useEffect(() => {
+    if (defaultExpanded) {
+      setExpanded(true);
+    }
+  }, [defaultExpanded]);
+
+  const openCancelModal = () => {
+    setCancelReasonId('wrong_info');
+    setCancelOtherText('');
+    setShowConfirm(true);
+  };
+
+  const closeCancelModal = () => {
+    if (cancelling) return;
+    setShowConfirm(false);
+  };
 
   const handleCancel = async () => {
+    const reason = buildCustomerCancelApiReason(cancelReasonId, cancelOtherText);
+    if (cancelReasonId === 'other') {
+      if (!reason) {
+        notifyInfo('Vui lòng nhập lý do khi chọn «Khác».');
+        return;
+      }
+      if (reason.length > 500) {
+        notifyInfo('Lý do không dài quá 500 ký tự.');
+        return;
+      }
+    }
+
     setCancelling(true);
     try {
-      await profileApi.cancelOrder(order.orderId);
+      await profileApi.cancelOrder(order.orderId, reason);
       queryClient.invalidateQueries({ queryKey: ['my-orders'] });
       setShowConfirm(false);
+      setCancelOtherText('');
       notifySuccess('Đã hủy đơn hàng.');
     } catch (e: unknown) {
       notifyError(e, 'Lỗi khi hủy đơn hàng');
@@ -240,62 +375,118 @@ function OrderCard({ order, allFeedbacks }: { order: Order, allFeedbacks: BEFeed
     }
   };
 
-  const handleFeedbackClick = () => {
-    if (order.orderStatus !== 'DELIVERED') return;
-    
-    // Gán tạm item đầu tiên nếu API cần productId
-    setSelectedItem(order.items[0]); 
-    setSelectedFeedback(orderFeedback);
-    setFeedbackModalOpen(true);
-  };
-
-  const getProductId = (item: OrderItem) => {
-    return item?.productId || '';
+  const handleCompleteOrder = async () => {
+    setCompleting(true);
+    try {
+      await orderApi.completeOrder(order.orderId);
+      await queryClient.invalidateQueries({ queryKey: ['my-orders'] });
+      notifySuccess('Đã xác nhận nhận hàng.');
+    } catch (e: unknown) {
+      notifyError(e, 'Lỗi khi xác nhận nhận hàng');
+    } finally {
+      setCompleting(false);
+    }
   };
 
   return (
     <div
-      className={`border border-gray-200 rounded-2xl overflow-hidden bg-white shadow-sm hover:shadow-md transition-shadow duration-200 ${order.orderStatus === 'CANCELLED' ? 'opacity-90' : ''}`}
+      className={`border rounded-2xl overflow-hidden bg-white shadow-sm hover:shadow-md transition-shadow duration-200 ${
+        highlighted ? 'border-indigo-300 ring-2 ring-indigo-100' : 'border-gray-200'
+      } ${order.orderStatus === 'CANCELLED' ? 'opacity-90' : ''}`}
     >
-      {/* Modal xác nhận hủy */}
+      {/* Modal xác nhận hủy + lý do */}
       {showConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div
             className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-            onClick={() => setShowConfirm(false)}
+            onClick={closeCancelModal}
           />
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-rose-100 flex items-center justify-center shrink-0">
-                <svg
-                  className="w-5 h-5 text-rose-600"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
-                </svg>
+          <div
+            className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[min(90vh,640px)] flex flex-col overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-6 space-y-4 overflow-y-auto">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-full bg-rose-100 flex items-center justify-center shrink-0">
+                  <svg
+                    className="w-5 h-5 text-rose-600"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"
+                    />
+                  </svg>
+                </div>
+                <div className="min-w-0">
+                  <p className="font-bold text-gray-900">Hủy đơn hàng</p>
+                  <p className="text-xs text-gray-500 mt-0.5 break-words">{orderDisplayTitle}</p>
+                </div>
               </div>
-              <div>
-                <p className="font-bold text-gray-900">Xác nhận hủy đơn?</p>
-                <p className="text-xs text-gray-500 mt-0.5">
-                  {order.orderName || `Đơn #${order.orderId.slice(0, 8).toUpperCase()}`}
-                </p>
+
+              <p className="text-sm text-gray-600">
+                 Vui lòng chọn lý do:
+              </p>
+
+              <div className="space-y-2.5">
+                {CUSTOMER_CANCEL_REASONS.map((opt) => (
+                  <label
+                    key={opt.id}
+                    className={`flex gap-3 cursor-pointer rounded-xl border px-3 py-2.5 transition-colors ${
+                      cancelReasonId === opt.id
+                        ? 'border-rose-300 bg-rose-50/60'
+                        : 'border-gray-100 bg-gray-50/80 hover:bg-gray-50'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name={`cancel-reason-${order.orderId}`}
+                      checked={cancelReasonId === opt.id}
+                      onChange={() => setCancelReasonId(opt.id)}
+                      className="mt-0.5 h-4 w-4 shrink-0 accent-rose-600"
+                    />
+                    <span className="text-sm text-gray-800 leading-snug">{opt.label}</span>
+                  </label>
+                ))}
               </div>
+
+              {cancelReasonId === 'other' && (
+                <div>
+                  <label htmlFor={`cancel-other-${order.orderId}`} className="text-xs font-semibold text-gray-600">
+                    Nhập lý do của bạn
+                  </label>
+                  <textarea
+                    id={`cancel-other-${order.orderId}`}
+                    value={cancelOtherText}
+                    onChange={(e) => setCancelOtherText(e.target.value)}
+                    placeholder="VD: Muốn đổi địa chỉ nhưng không sửa được trên đơn..."
+                    rows={3}
+                    maxLength={500}
+                    disabled={cancelling}
+                    className="mt-1.5 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm placeholder:text-gray-400 focus:border-rose-400 focus:ring-2 focus:ring-rose-100 outline-none resize-y min-h-[88px]"
+                  />
+                  <p className="text-[10px] text-gray-400 mt-1 text-right">
+                    {cancelOtherText.length}/500
+                  </p>
+                </div>
+              )}
             </div>
-            <p className="text-sm text-gray-600 leading-relaxed">
-              Đơn hàng <span className="font-semibold text-violet-700">PRE_ORDER</span> sẽ chuyển
-              sang <span className="font-semibold text-rose-600">Đã hủy</span>.
-            </p>
-            <div className="flex gap-3 pt-1">
+
+            <div className="flex gap-3 p-6 pt-0 border-t border-gray-50 bg-white shrink-0">
               <button
-                onClick={() => setShowConfirm(false)}
+                type="button"
+                onClick={closeCancelModal}
                 disabled={cancelling}
                 className="flex-1 py-2.5 text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors disabled:opacity-50"
               >
-                Không hủy
+                Đóng
               </button>
               <button
+                type="button"
                 onClick={handleCancel}
                 disabled={cancelling}
                 className="flex-1 py-2.5 text-sm font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xl transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
@@ -303,7 +494,7 @@ function OrderCard({ order, allFeedbacks }: { order: Order, allFeedbacks: BEFeed
                 {cancelling && (
                   <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
                 )}
-                Xác nhận
+                Xác nhận hủy
               </button>
             </div>
           </div>
@@ -329,9 +520,13 @@ function OrderCard({ order, allFeedbacks }: { order: Order, allFeedbacks: BEFeed
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <p className="font-semibold text-gray-800 text-sm">
-                {order.orderName || `Đơn #${order.orderId.slice(0, 8).toUpperCase()}`}
+                {orderDisplayTitle}
               </p>
             </div>
+            <p className="text-xs text-gray-500 mt-1 flex items-center gap-1.5">
+              <Calendar className="w-3.5 h-3.5 shrink-0 text-gray-400" />
+              <span className="tabular-nums">{formatOrderCreatedAtLabel(order.createdAt)}</span>
+            </p>
             <p className="text-xs text-gray-400 truncate max-w-xs mt-0.5">
               {order.deliveryAddress}
             </p>
@@ -363,6 +558,50 @@ function OrderCard({ order, allFeedbacks }: { order: Order, allFeedbacks: BEFeed
 
       {expanded && (
         <div className="border-t border-gray-100 px-5 py-4 bg-gray-50/40 space-y-4">
+          <div className="rounded-2xl border border-gray-200 bg-white px-4 py-3 shadow-sm">
+            <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500 mb-2">
+              Thông tin giao hàng
+            </p>
+            <OrderShippingDetails
+              recipientName={order.recipientName}
+              phoneNumber={order.phoneNumber}
+              deliveryAddress={order.deliveryAddress}
+              valueClassName="text-gray-900 text-sm"
+            />
+          </div>
+          {order.orderStatus === 'ON_HOLD' &&
+          String(order.operationalHoldReason ?? '').trim() ? (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-amber-800 mb-1">
+                Ghi chú tạm giữ
+              </p>
+              <p className="text-gray-800 leading-relaxed whitespace-pre-wrap">
+                {String(order.operationalHoldReason).trim()}
+              </p>
+            </div>
+          ) : null}
+          {rawStatus === 'CANCELLED' && cancelReasonTrimmed ? (
+            <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-rose-800 mb-1">
+                Lý do hủy
+              </p>
+              <p className="text-gray-800 leading-relaxed whitespace-pre-wrap">{cancelReasonTrimmed}</p>
+            </div>
+          ) : null}
+          {deliveredImageSrc && (
+            <div className="rounded-2xl border border-emerald-100 bg-white px-4 py-3 shadow-sm">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-emerald-700 mb-2">
+                Ảnh xác nhận giao hàng
+              </p>
+              <a href={deliveredImageSrc} target="_blank" rel="noreferrer" className="block">
+                <img
+                  src={deliveredImageSrc}
+                  alt="Ảnh xác nhận giao hàng"
+                  className="max-h-72 w-full rounded-xl object-contain bg-slate-50 border border-slate-100"
+                />
+              </a>
+            </div>
+          )}
           <div className="space-y-3">
             {order.items.map((item, idx) => (
               <OrderItemCard
@@ -370,7 +609,7 @@ function OrderCard({ order, allFeedbacks }: { order: Order, allFeedbacks: BEFeed
                 item={item}
                 index={idx}
                 total={order.items.length}
-                orderName={order.orderName}
+                orderDisplayLabel={orderDisplayTitle}
                 orderId={order.orderId}
                 orderStatus={order.orderStatus}
               />
@@ -385,6 +624,8 @@ function OrderCard({ order, allFeedbacks }: { order: Order, allFeedbacks: BEFeed
               
               {order.orderStatus === 'CANCELLED' || order.orderStatus === 'REFUNDED' ? (
                 <span className="text-lg font-bold text-gray-400">0 ₫</span>
+              ) : order.orderStatus === 'COMPLETED' ? (
+                <span className="text-sm font-bold text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full">Đã thanh toán đủ ✓</span>
               ) : order.remainingAmount <= 0 ? (
                 <span className="text-sm font-bold text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full">Đã thanh toán đủ ✓</span>
               ) : (
@@ -397,7 +638,7 @@ function OrderCard({ order, allFeedbacks }: { order: Order, allFeedbacks: BEFeed
           </div>
 
           {/* KHỐI FEEDBACK CHUNG CHO TOÀN ĐƠN HÀNG */}
-          {order.orderStatus === 'DELIVERED' && (
+          {order.orderStatus === 'COMPLETED' && (
             <div className="pt-2">
               {hasFeedback ? (
                 <div className="bg-white border border-indigo-100 rounded-xl p-4">
@@ -407,47 +648,42 @@ function OrderCard({ order, allFeedbacks }: { order: Order, allFeedbacks: BEFeed
                   </p>
                   <FeedbackPreview
                     feedback={orderFeedback}
-                    onEdit={handleFeedbackClick}
+                    onEdit={() => {}}
+                    showEditButton={false}
                   />
                 </div>
-              ) : (
-                <button
-                  onClick={handleFeedbackClick}
-                  className="w-full px-4 py-3 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition-all shadow-md shadow-indigo-100 flex items-center justify-center gap-2"
-                >
-                  Viết đánh giá cho đơn hàng
-                </button>
-              )}
+              ) : null}
             </div>
+          )}
+
+          {canComplete && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleCompleteOrder();
+              }}
+              disabled={completing}
+              className="w-full flex items-center justify-center gap-2 py-2.5 text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 border border-emerald-600 rounded-xl transition-colors disabled:opacity-60"
+            >
+              {completing && <RefreshCcw className="w-4 h-4 animate-spin" />}
+              Xác nhận nhận hàng
+            </button>
           )}
 
           {canCancel && (
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                setShowConfirm(true);
+                openCancelModal();
               }}
               className="w-full flex items-center justify-center gap-2 py-2.5 text-sm font-semibold text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-xl transition-colors"
             >
-              Hủy đơn PRE_ORDER
+              Hủy đơn hàng
             </button>
           )}
         </div>
       )}
 
-      {/* Render FeedbackModal nếu đơn đã DELIVERED */}
-      {order.orderStatus === 'DELIVERED' && (
-        <FeedbackModal
-          isOpen={feedbackModalOpen}
-          onClose={() => setFeedbackModalOpen(false)}
-          orderId={order.orderId}
-          productId={selectedItem ? getProductId(selectedItem) : ''}
-          existingFeedback={selectedFeedback}
-          onSuccess={() => {
-            queryClient.invalidateQueries({ queryKey: ['my-feedbacks'] });
-          }}
-        />
-      )}
     </div>
   );
 }
@@ -457,8 +693,10 @@ function OrderCard({ order, allFeedbacks }: { order: Order, allFeedbacks: BEFeed
 export default function MyOrders() {
   const [activeTab, setActiveTab] = useState('ALL');
   const [currentPage, setCurrentPage] = useState(1);
+  const [searchParams] = useSearchParams();
   const PAGE_SIZE = 10;
   const queryClient = useQueryClient();
+  const focusedOrderId = searchParams.get('orderId');
 
   useEffect(() => {
     queryClient.invalidateQueries({ queryKey: ['my-feedbacks'] });
@@ -493,6 +731,7 @@ export default function MyOrders() {
     'PREORDER_CONFIRMED',
     'STOCK_REQUESTED',
     'STOCK_READY',
+    'ON_HOLD',
     'IN_PRODUCTION',
     'PROCESSING',
     'PREPARING',
@@ -502,6 +741,7 @@ export default function MyOrders() {
     'READY_TO_SHIP',
     'DELIVERING',
     'DELIVERED',
+    'COMPLETED',
     'CANCELLED',
     'REFUNDED',
     'HANDED_TO_CARRIER',
@@ -511,6 +751,20 @@ export default function MyOrders() {
     const items = (data?.items || []).filter((o) => CUSTOMER_VISIBLE_STATUSES.has(o.orderStatus));
     return sortOrdersByCreatedAtDesc(items);
   }, [data]);
+
+  useEffect(() => {
+    if (!focusedOrderId || allOrders.length === 0) {
+      return;
+    }
+
+    const focusedIndex = allOrders.findIndex((o) => o.orderId === focusedOrderId);
+    if (focusedIndex < 0) {
+      return;
+    }
+
+    setActiveTab('ALL');
+    setCurrentPage(Math.floor(focusedIndex / PAGE_SIZE) + 1);
+  }, [allOrders, focusedOrderId, PAGE_SIZE]);
 
   if (isLoading) {
     return (
@@ -582,15 +836,18 @@ export default function MyOrders() {
   const totalPages = Math.max(1, Math.ceil(filteredOrders.length / PAGE_SIZE));
   const paginated = filteredOrders.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
-  // Always show all 7 customer-visible filter groups
+  // Always show all customer-visible filter groups
   const visibleStatuses = [
     'ALL',
+    'PENDING',
     'CONFIRMED',
     'PREORDER_CONFIRMED',
     'PROCESSING',
+    'ON_HOLD',
     'READY_TO_SHIP',
     'DELIVERING',
     'DELIVERED',
+    'COMPLETED',
     'CANCELLED',
   ];
 
@@ -606,9 +863,17 @@ export default function MyOrders() {
       <div className="mb-6 flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-gray-100 pb-4">
         <div>
           <h1 className="text-2xl font-extrabold text-gray-900 tracking-tight">Đơn hàng của tôi</h1>
-          <p className="text-sm text-gray-500 mt-1 flex items-center gap-1.5">
-            <PackageOpen className="w-4 h-4" />
-            Đang hiển thị {filteredOrders.length} đơn hàng
+          <p className="text-sm text-gray-500 mt-1 flex flex-col gap-1 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-2 sm:gap-y-0">
+            <span className="inline-flex items-center gap-1.5">
+              <PackageOpen className="w-4 h-4 shrink-0" />
+              <span>
+                Đang hiển thị <span className="font-semibold text-gray-700">{filteredOrders.length}</span> đơn
+              </span>
+            </span>
+            <span className="hidden sm:inline text-gray-300" aria-hidden>
+              ·
+            </span>
+            <span className="text-xs sm:text-sm text-gray-500 leading-snug">{ORDER_LIST_SORT_HINT_NEWEST_FIRST}</span>
           </p>
         </div>
 
@@ -687,7 +952,12 @@ export default function MyOrders() {
             className="animate-in fade-in slide-in-from-bottom-2 fill-mode-both"
             style={{ animationDelay: `${index * 50}ms` }}
           >
-            <OrderCard order={order} allFeedbacks={allFeedbacks || []} />
+            <OrderCard
+              order={order}
+              allFeedbacks={allFeedbacks || []}
+              defaultExpanded={order.orderId === focusedOrderId}
+              highlighted={order.orderId === focusedOrderId}
+            />
           </div>
         ))}
       </div>

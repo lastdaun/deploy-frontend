@@ -12,4 +12,9 @@ export const orderApi = {
 
     return response.data.result;
   },
+
+  completeOrder: async (orderId: string) => {
+    const response = await api.put<ApiResponse<unknown>>(`/orders/${orderId}/complete`);
+    return response.data.result;
+  },
 };

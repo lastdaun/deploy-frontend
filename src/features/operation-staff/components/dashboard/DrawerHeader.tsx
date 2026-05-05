@@ -1,6 +1,7 @@
 import React from 'react';
 import { X } from 'lucide-react';
 import type { BEOrder } from '@/features/operation-staff/types/types';
+import { formatOrderDisplayNameFromOrder } from '@/lib/orderDisplayName';
 import CopyButton from '@/features/operation-staff/components/common/CopyButton.tsx';
 
 interface DrawerHeaderProps {
@@ -16,7 +17,7 @@ const DrawerHeader: React.FC<DrawerHeaderProps> = ({ order, onClose }) => {
         <div className="flex items-center gap-3">
           <div>
             <h2 className="text-xl md:text-2xl font-extrabold text-slate-900 dark:text-white leading-tight tracking-tight">
-              <div className="mb-2">Đơn hàng: {order.orderName}</div>
+              <div className="mb-2">Đơn hàng: {formatOrderDisplayNameFromOrder(order)}</div>
               <div className="flex items-center gap-2">
                 <span>Mã đơn: {order.orderId}</span>
                 <CopyButton text={order.orderId} size="md" />

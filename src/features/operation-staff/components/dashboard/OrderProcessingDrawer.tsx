@@ -5,12 +5,14 @@ import DrawerContent from './DrawerContent';
 import DrawerFooter from './DrawerFooter';
 import { useOrderDrawerStore } from '@/features/operation-staff/store/orderDrawerStore.ts';
 import { useProductionStore } from '@/features/operation-staff/store/productionStore.ts';
+import { formatOrderDisplayNameFromOrder } from '@/lib/orderDisplayName';
 
 const OrderProcessingDrawer: React.FC = () => {
   const { isOpen, selectedOrder, closeDrawer } = useOrderDrawerStore();
   const startProduction = useProductionStore((state) => state.startOrder);
   const finishOrder = useProductionStore((state) => state.finishOrder);
   const readyToShip = useProductionStore((state) => state.readyToShip);
+  const reportOperationalHold = useProductionStore((state) => state.reportOperationalHold);
   const startPackaging = useProductionStore((state) => state.startPackaging);
   const handoverToCarrier = useProductionStore((state) => state.handoverToCarrier);
   const startDelivery = useProductionStore((state) => state.startDelivery);
@@ -129,7 +131,9 @@ const OrderProcessingDrawer: React.FC = () => {
           <DrawerContent
             orderId={currentOrder.orderId}
             isOpen={isOpen}
-            onConfirmedItemsReadyChange={setConfirmedItemsReady}
+            onItemActionProgressChange={(progress) => {
+              setConfirmedItemsReady(progress.allProcessed);
+            }}
           />
           <DrawerFooter
             onStartProduction={handleStartProduction}
@@ -141,7 +145,12 @@ const OrderProcessingDrawer: React.FC = () => {
             isProcessing={isProcessing}
             orderStatus={currentOrder.orderStatus}
             trackingNumber={currentOrder.trackingNumber}
+            operationalHoldReason={currentOrder.operationalHoldReason}
             canShowCompleteForConfirmed={confirmedItemsReady}
+            holdModalSubtitle={formatOrderDisplayNameFromOrder(currentOrder)}
+            onSubmitReportHold={(reason) =>
+              reportOperationalHold(currentOrder.orderId, reason)
+            }
           />
         </>
       )}

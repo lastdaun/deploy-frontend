@@ -86,10 +86,15 @@ export interface Order {
     | 'SHIPPED'
     | 'DELIVERING'
     | 'DELIVERED'
+    | 'COMPLETED'
     | 'CANCELLED'
     | 'REFUNDED';
   /** ISO từ API — sort FIFO cùng nhóm trạng thái */
   createdAt?: string;
+  deliveredImageUrl?: string | null;
+  cancellationReason?: string | null;
+  /** Lý do khi đơn tạm giữ (vận hành) — optional */
+  operationalHoldReason?: string | null;
   totalAmount: number;
   depositAmount: number;
   remainingAmount: number;
@@ -97,10 +102,8 @@ export interface Order {
   items: OrderItem[];
   payments: Payment[];
   shipperInfo: ShipperInfo | null;
-  comboId: string | null;
   comboName: string | null;
   comboDiscountAmount: number | null;
-  comboSnapshot: string | null;
   refundedAmount: number;
   finalTotalAfterRefund: number;
   bankInfo: BankInfo;

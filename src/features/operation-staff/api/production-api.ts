@@ -34,8 +34,7 @@ export const productionApi = {
       'PRODUCED',
       'PACKAGING',
       'HANDED_TO_CARRIER',
-      'DELIVERING',
-      'DELIVERED',
+      'ON_HOLD',
     ]);
 
     const filteredOrders = allOrders.filter((order: BEOrder) => visibleStatuses.has(order.orderStatus));
@@ -58,6 +57,18 @@ export const productionApi = {
     return response.data.result;
   },
 
+  reportOperationalHold: async (orderId: string, reason: string): Promise<BEOrder> => {
+    const response = await api.put(
+      `/production/orders/${orderId}/report-hold?reason=${encodeURIComponent(reason)}`,
+    );
+    return response.data.result;
+  },
+
+  resumeFromOperationalHold: async (orderId: string): Promise<BEOrder> => {
+    const response = await api.put(`/management/orders/${orderId}/resume-from-hold`);
+    return response.data.result;
+  },
+
   updateItemStatus: async (orderItemId: string, status: string): Promise<BEOrderItem> => {
     const response = await api.put(
       `/production/orders/items/${orderItemId}/status?status=${status}`,
@@ -67,7 +78,7 @@ export const productionApi = {
 
   getReadyToShipOrders: async (): Promise<BEOrder[]> => {
     const response = await api.get('/management/orders?status=READY_TO_SHIP');
-    return response.data.result;
+    return response.data.result?.items || response.data.result?.content || [];
   },
 
   getShippingOrders: async (): Promise<BEOrder[]> => {
@@ -75,7 +86,7 @@ export const productionApi = {
       params: { page: 0, size: 1000, sortBy: 'createdAt', sortDir: 'desc' },
     });
     const all = response.data.result?.items || response.data.result?.content || [];
-    const shippingStatuses = new Set(['READY_TO_SHIP', 'DELIVERING', 'DELIVERED']);
+    const shippingStatuses = new Set(['READY_TO_SHIP']);
     return all.filter((o: BEOrder) => shippingStatuses.has(o.orderStatus));
   },
 

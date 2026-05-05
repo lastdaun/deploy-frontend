@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { Camera, Loader2, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { formatOrderDisplayName } from '@/lib/orderDisplayName';
 
-const MAX_BYTES = 8 * 1024 * 1024;
+const MAX_BYTES = 5 * 1024 * 1024;
 const ACCEPT = 'image/*';
 
 type ConfirmDeliveryModalProps = {
@@ -58,7 +59,7 @@ const ConfirmDeliveryModal: React.FC<ConfirmDeliveryModalProps> = ({
       return;
     }
     if (f.size > MAX_BYTES) {
-      setError('Ảnh không được vượt quá 8MB.');
+      setError('Ảnh không được vượt quá 5MB.');
       setFile(null);
       e.target.value = '';
       return;
@@ -95,7 +96,10 @@ const ConfirmDeliveryModal: React.FC<ConfirmDeliveryModalProps> = ({
         <div className="flex items-start justify-between border-b border-slate-100 px-5 py-4">
           <div>
             <h2 className="text-lg font-bold text-slate-900">Xác nhận đã giao hàng</h2>
-            <p className="mt-0.5 text-sm text-slate-500">Đơn #{orderId.slice(0, 8)}…</p>
+            <p className="mt-0.5 text-sm text-slate-500">
+              {formatOrderDisplayName({ orderId, orderName: null })}
+            </p>
+            <p className="mt-0.5 text-xs text-slate-400 font-mono break-all">{orderId}</p>
             <p className="mt-1 text-xs text-amber-700">
               Tải ảnh minh chứng bàn giao (ảnh sản phẩm, người nhận, v.v.) trước khi xác nhận.
             </p>
@@ -136,7 +140,7 @@ const ConfirmDeliveryModal: React.FC<ConfirmDeliveryModalProps> = ({
               <>
                 <Camera className="h-10 w-10 text-slate-400" />
                 <span className="text-center text-sm font-medium text-slate-600">Chạm để chọn / chụp ảnh</span>
-                <span className="text-xs text-slate-400">JPG, PNG, WebP · tối đa 8MB</span>
+                <span className="text-xs text-slate-400">JPG, PNG, WebP · tối đa 5MB</span>
               </>
             )}
           </label>

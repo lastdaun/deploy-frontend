@@ -15,13 +15,11 @@ import { sortOrdersByCreatedAtDesc } from '@/lib/orderSort';
 
 const ITEMS_PER_PAGE = 10;
 
-type ShippingStatusFilter = 'ALL' | 'READY_TO_SHIP' | 'DELIVERING' | 'DELIVERED';
+type ShippingStatusFilter = 'ALL' | 'READY_TO_SHIP';
 
 const FILTER_OPTIONS: { value: ShippingStatusFilter; label: string }[] = [
   { value: 'ALL', label: 'Tất cả' },
   { value: 'READY_TO_SHIP', label: 'Sẵn sàng vận chuyển' },
-  { value: 'DELIVERING', label: 'Đang giao hàng' },
-  { value: 'DELIVERED', label: 'Đã giao hàng' },
 ];
 
 const ShippingPage: React.FC = () => {

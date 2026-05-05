@@ -1,6 +1,7 @@
 import React from 'react';
 import { Truck } from 'lucide-react';
 import type { BEOrder } from '@/features/operation-staff/types/types';
+import { formatOrderDisplayNameFromOrder } from '@/lib/orderDisplayName';
 import { getOrderCollectAmount } from '@/features/shipper/utils/order-money';
 import { orderStatusLabel, orderStatusRowPillClassName } from '@/lib/orderStatusUi';
 
@@ -23,8 +24,9 @@ const ShipperOrderRow: React.FC<ShipperOrderRowProps> = ({ order, onStartDeliver
   return (
     <tr className={`group transition-colors`}>
       <td className="px-6 py-4 align-middle">
-        <div className="flex flex-col">
-          <span className="font-bold text-slate-900 dark:text-white">{order.orderId}</span>
+        <div className="flex flex-col gap-0.5">
+          <span className="font-bold text-slate-900 dark:text-white">{formatOrderDisplayNameFromOrder(order)}</span>
+          <span className="text-[10px] font-mono text-slate-400">{order.orderId}</span>
           <span className="text-xs text-slate-500">Khách: {order.customerId}</span>
         </div>
       </td>

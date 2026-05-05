@@ -4,6 +4,7 @@ import {
   LogOut,
   ChevronLeft,
   ChevronRight,
+  Users,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Logo from '@/components/common/Logo';
@@ -12,8 +13,8 @@ import { useSidebar } from '../hooks/useSidebar';
 import { UserAvatar } from '@/components/ui/UserAvatar';
 
 const navigation = [
-  { name: 'Trang chủ', href: '/admin', icon: LayoutDashboard },
-
+  { name: 'Tổng quan', href: '/admin', icon: LayoutDashboard },
+  { name: 'Người dùng', href: '/admin/users', icon: Users },
 ];
 
 export function Sidebar() {

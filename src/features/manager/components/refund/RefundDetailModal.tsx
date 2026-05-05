@@ -2,6 +2,7 @@
 
 import type { RefundItem } from '../../types/refund'; // Điều chỉnh lại đường dẫn nếu cần
 import { fmt, getProductName } from '@/lib/utils'; // Điều chỉnh lại đường dẫn nếu cần
+import { formatOrderDisplayNameFromOrder } from '@/lib/orderDisplayName';
 import { toast } from 'sonner'; // Import sonner
 import { useCheckoutRefund } from '../../hooks/useRefunds'; // Import hook TanStack
 
@@ -74,7 +75,8 @@ export function RefundDetailModal({ refund, onClose }: RefundDetailModalProps) {
             {(
               [
                 ['Sản phẩm', getProductName(order) ?? '—'],
-                ['Mã đơn hàng', `#${(order.orderId ?? '').slice(0, 8)}...`],
+                ['Mã đơn hàng', formatOrderDisplayNameFromOrder(order)],
+                ['Họ tên khách', order.recipientName?.trim() || '—'],
                 ['SĐT khách', order.phoneNumber || '—'],
                 ['Số tiền hoàn', fmt(order.paidAmount)],
                 ['Đặt cọc', fmt(order.depositAmount)],
@@ -83,7 +85,7 @@ export function RefundDetailModal({ refund, onClose }: RefundDetailModalProps) {
             ).map(([k, v]) => (
               <div key={k} className="bg-gray-50 rounded-xl px-3 py-2.5">
                 <p className="text-[10px] text-gray-400 uppercase tracking-wide">{k}</p>
-                <p className="text-sm font-semibold text-gray-800 mt-0.5 truncate">{v}</p>
+                <p className="text-sm font-semibold text-gray-800 mt-0.5 break-words">{v}</p>
               </div>
             ))}
           </div>

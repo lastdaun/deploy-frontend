@@ -3,6 +3,9 @@
  * thiếu createdAt xếp sau cùng nhóm, tie-break theo orderId.
  */
 
+/** Gợi chú giao diện danh sách đơn (khách / sale / quản trị): mới tạo lên đầu. */
+export const ORDER_LIST_SORT_HINT_NEWEST_FIRST = 'Đơn mới khởi tạo hiển thị phía trên (theo ngày tạo, mới → cũ).';
+
 /** Giá trị parse được; thiếu/ngày không hợp lệ trả về undefined để xử lý asc/desc khác nhau. */
 export function createdAtSortKey(o: { createdAt?: string | null }): number | undefined {
   if (o.createdAt) {
@@ -81,6 +84,7 @@ export const UNIFIED_ORDER_STATUS_PIPELINE: readonly string[] = [
   'DELIVERING',
   'SHIPPED',
   'DELIVERED',
+  'COMPLETED',
   'CANCELLED',
   'REFUNDED',
 ];
@@ -111,7 +115,7 @@ export function operationOrderStatusPriority(status: string): number {
 /** Quản lý: pipeline đang chạy trước, đã giao, rồi hủy/hoàn */
 export function managerOrderStatusPriority(status: string): number {
   if (['CANCELLED', 'REFUNDED'].includes(status)) return 2;
-  if (['DELIVERED', 'SHIPPED'].includes(status)) return 1;
+  if (['DELIVERED', 'COMPLETED', 'SHIPPED'].includes(status)) return 1;
   return 0;
 }
 
@@ -123,7 +127,7 @@ export function sellerOrderStatusPriority(status: string): number {
 /** Khách: đang xử lý trước, đã giao, rồi hủy/hoàn */
 export function customerOrderStatusPriority(status: string): number {
   if (['CANCELLED', 'REFUNDED'].includes(status)) return 2;
-  if (['DELIVERED'].includes(status)) return 1;
+  if (['DELIVERED', 'COMPLETED'].includes(status)) return 1;
   return 0;
 }
 
@@ -131,6 +135,6 @@ export function customerOrderStatusPriority(status: string): number {
 export function shippingOrderStatusPriority(status: string): number {
   if (status === 'READY_TO_SHIP') return 0;
   if (['DELIVERING', 'SHIPPED'].includes(status)) return 1;
-  if (status === 'DELIVERED') return 2;
+  if (['DELIVERED', 'COMPLETED'].includes(status)) return 2;
   return 3;
 }

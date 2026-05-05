@@ -2,6 +2,7 @@ import React from 'react';
 import type { BEOrder } from '@/features/operation-staff/types/types';
 import { useOrderDrawerStore } from '@/features/operation-staff/store/orderDrawerStore.ts';
 import CopyButton from '@/features/operation-staff/components/common/CopyButton.tsx';
+import { formatOrderDisplayNameFromOrder } from '@/lib/orderDisplayName';
 import { orderStatusLabel, orderStatusRowPillClassName } from '@/lib/orderStatusUi';
 
 interface OrderRowProps {
@@ -17,16 +18,23 @@ const OrderRow: React.FC<OrderRowProps> = ({ order }) => {
   return (
     <tr className="group transition-colors">
       <td className="px-6 py-4 align-middle">
-        <div className="flex flex-col">
+        <div className="flex flex-col gap-0.5">
           <div className="flex items-center gap-2">
-            <span className="font-bold text-slate-900 dark:text-white">{order.orderId}</span>
+            <span className="font-bold text-slate-900 dark:text-white">
+              {formatOrderDisplayNameFromOrder(order)}
+            </span>
             <CopyButton text={order.orderId} size="sm" />
           </div>
+          <span className="text-[10px] font-mono text-slate-400 truncate max-w-[220px]" title={order.orderId}>
+            {order.orderId}
+          </span>
         </div>
       </td>
 
       <td className="px-6 py-4 align-middle">
-        <div className="mb-1 text-xs text-slate-500">{order?.orderName || 'N/A'}</div>
+        <div className="mb-1 text-xs font-semibold text-slate-700">
+          {order.recipientName?.trim() || '—'}
+        </div>
       </td>
 
       <td className="px-6 py-4 align-middle">

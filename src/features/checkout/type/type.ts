@@ -62,11 +62,32 @@ export interface CheckoutState {
   updateShippingData: (data: Partial<CheckoutState['shippingData']>) => void;
   resetCheckout: () => void;
 }
-// Chỉ khai báo những gì màn hình Success cần dùng
+// Chỉ khai báo những gì màn hình Success cần dùng;
+// `/orders/:id` có thể trả thêm trường — dùng cho `formatOrderDisplayNameFromOrder`.
 export interface OrderDetailsData {
   orderId: string;
-  recipientName: string; // Lấy tên để hiển thị "Cảm ơn [Tên]..."
-  totalAmount: number; // Lấy tổng tiền để show biên lai (nếu cần)
+  recipientName: string;
+  customerEmail?: string | null;
+  totalAmount?: number;
+  orderName?: string | null;
+  comboName?: string | null;
+  items?: ReadonlyArray<{
+    orderItemId?: string | null;
+    productVariantId?: string | null;
+    quantity?: number | null;
+    orderItemType?: string | null;
+    lensId?: string | null;
+    productName?: string | null;
+    itemName?: string | null;
+    lensName?: string | null;
+    prescription?:
+      | {
+          id?: string | null;
+          imageUrl?: string | null;
+          note?: string | null;
+        }
+      | null;
+  }>;
 }
 
 export interface OrderDetailsResponse {

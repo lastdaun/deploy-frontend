@@ -3,6 +3,7 @@ import { toast } from 'sonner';
 import { useAffectedOrders, useCreateBatch, useInActivateVariant } from '../../hooks/useRefunds';
 import { useFilteredVariants } from '../../hooks/useVariants';
 import { fmt } from '@/lib/utils';
+import { formatOrderDisplayNameFromOrder } from '@/lib/orderDisplayName';
 import type { Product, ProductVariant } from '../../types/types';
 import { useFilteredProducts } from '../../hooks/useProducts';
 
@@ -275,7 +276,7 @@ export function CreateBatchModal({ onClose }: { onClose: () => void }) {
                       className="flex justify-between items-center bg-gray-50 p-3 rounded-xl border border-gray-100"
                     >
                       <span className="font-bold text-gray-700 text-xs">
-                        #{item.order.orderId.slice(-8).toUpperCase()}
+                        {formatOrderDisplayNameFromOrder(item.order)}
                       </span>
                       <span className="font-black text-indigo-600 text-xs">
                         {fmt(item.order.paidAmount)}

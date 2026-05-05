@@ -118,6 +118,7 @@ export type BEOrderStatus =
   | 'SHIPPED'
   | 'DELIVERING'
   | 'DELIVERED'
+  | 'COMPLETED'
   | 'CANCELLED';
 export type BEOrderItemType = 'IN_STOCK' | 'PRE_ORDER';
 export type BEOrderItemStatus = 'IN_PRODUCTION' | 'PRODUCED';
@@ -170,11 +171,11 @@ export interface BEOrder {
   depositAmount: number;
   remainingAmount?: number | null;
   items: BEOrderItem[];
-  comboId?: string;
   comboName?: string;
   comboDiscountAmount?: number;
-  comboSnapshot?: string;
   orderName: string;
   recipientName: string;
   trackingNumber?: string;
+  operationalHoldReason?: string | null;
+  statusBeforeHold?: string | null;
 }

@@ -42,9 +42,11 @@ export const profileApi = {
     return response.data.result;
   },
 
-  // 5. Hủy đơn hàng (chỉ áp dụng cho PRE_ORDER chưa xử lý)
-  cancelOrder: (orderId: string) => {
-    return api.put(`/orders/${orderId}/cancel`);
+  // 5. Hủy đơn hàng — `reason` gửi query `?reason=` (BE CancelOrder)
+  cancelOrder: (orderId: string, reason?: string) => {
+    const trimmed = reason?.trim();
+    const q = trimmed ? `?reason=${encodeURIComponent(trimmed)}` : '';
+    return api.put(`/orders/${orderId}/cancel${q}`);
   },
 
   // 6. Lấy địa chỉ của người dùng

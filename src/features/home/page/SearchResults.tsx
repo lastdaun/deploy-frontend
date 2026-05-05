@@ -113,7 +113,7 @@ export const SearchResults = () => {
   };
 
   // 🌟 LOGIC BREADCRUMB ĐỘNG
-  const breadcrumbItems = [{ label: 'Cửa hàng', link: '' }];
+  const breadcrumbItems = [{ label: 'Sản phẩm', link: '' }];
 
   if (isLoading) {
     return (

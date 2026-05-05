@@ -2,13 +2,16 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { orderApi, type Order } from '../../api/order-api';
-import ConfirmModal from '@/features/operation-staff/components/common/ConfirmModal.tsx';
+import { SellerCancelOrderReasonModal } from '@/features/seller/components/SellerCancelOrderReasonModal';
 import { effectivePrescriptionImageUrl, getRawPrescriptionImageSource } from '@/lib/prescriptionImageUrl';
 import { notifyError, notifySuccess } from '@/lib/notifyError';
+import { formatOrderDisplayNameFromOrder } from '@/lib/orderDisplayName';
+import { OrderShippingDetails } from '@/components/order/OrderShippingDetails';
 import {
   canSellerRejectOrder,
   canSellerVerifyOrder,
   orderHasPreorderItem,
+  canSellerActOnOnHoldOrder,
 } from '@/features/seller/utils/orderGuards';
 
 export default function OrderDetailPage() {
@@ -17,6 +20,9 @@ export default function OrderDetailPage() {
   const queryClient = useQueryClient();
   const [order, setOrder] = useState<Order | null>(null);
   const [processing, setProcessing] = useState(false);
+  const [rejectLoading, setRejectLoading] = useState(false);
+  const [resumeHoldLoading, setResumeHoldLoading] = useState(false);
+  const [cancelReasonModalOpen, setCancelReasonModalOpen] = useState(false);
 
   useEffect(() => {
     if (!orderId) return;
@@ -31,20 +37,17 @@ export default function OrderDetailPage() {
     return <div className="p-6">Đang tải chi tiết đơn...</div>;
   }
 
-  const handleReject = async () => {
+  const handleRejectOpen = () => {
     if (!orderId) return;
-    setModalOpen(true);
+    setCancelReasonModalOpen(true);
   };
 
-  const [modalOpen, setModalOpen] = useState(false);
-
-  const handleConfirmReject = async () => {
+  const handleRejectConfirm = async (reason: string) => {
     if (!orderId) return;
-    setModalOpen(false);
 
-    setProcessing(true);
+    setRejectLoading(true);
     try {
-      await orderApi.rejectOrder(orderId);
+      await orderApi.rejectOrder(orderId, reason);
       try {
         const fresh = await orderApi.getOrderDetail(orderId);
         setOrder(fresh);
@@ -53,12 +56,13 @@ export default function OrderDetailPage() {
       }
       await queryClient.invalidateQueries({ queryKey: ['orders'] });
       await queryClient.refetchQueries({ queryKey: ['orders'] });
+      setCancelReasonModalOpen(false);
       notifySuccess('Đã hủy đơn thành công.');
       setTimeout(() => navigate(-1), 1500);
     } catch (error) {
       notifyError(error, 'Có lỗi xảy ra, vui lòng thử lại.');
     } finally {
-      setProcessing(false);
+      setRejectLoading(false);
     }
   };
 
@@ -89,8 +93,32 @@ export default function OrderDetailPage() {
     }
   };
 
+  const handleResumeFromHold = async () => {
+    if (!orderId) return;
+    setResumeHoldLoading(true);
+    try {
+      await orderApi.resumeFromOperationalHold(orderId);
+      try {
+        const fresh = await orderApi.getOrderDetail(orderId);
+        setOrder(fresh);
+      } catch {
+        /* ignore */
+      }
+      await queryClient.invalidateQueries({ queryKey: ['orders'] });
+      await queryClient.refetchQueries({ queryKey: ['orders'] });
+      notifySuccess('Đã tiếp tục xử lý đơn — vận hành có thể làm tiếp.');
+    } catch (error) {
+      notifyError(error, 'Có lỗi xảy ra, vui lòng thử lại.');
+    } finally {
+      setResumeHoldLoading(false);
+    }
+  };
+
   const showApprove = canSellerVerifyOrder(order);
   const showReject = canSellerRejectOrder(order);
+  const showOnHoldActions = canSellerActOnOnHoldOrder(order);
+
+  const busy = processing || rejectLoading || resumeHoldLoading;
 
   return (
     <>
@@ -102,10 +130,18 @@ export default function OrderDetailPage() {
       <div className="grid grid-cols-12 gap-6">
         {/* LEFT */}
         <div className="col-span-4 space-y-4">
-          <div className="bg-white p-4 rounded-xl border">
-            <h3 className="font-semibold mb-3">Khách hàng</h3>
-            <p className="font-medium">{order.phoneNumber}</p>
-            <p className="text-sm text-gray-500">{order.deliveryAddress}</p>
+          <div className="bg-white p-4 rounded-xl border space-y-3">
+            <h2 className="text-lg font-bold text-gray-900">
+              {formatOrderDisplayNameFromOrder(order)}
+            </h2>
+            <p className="text-[11px] font-mono text-gray-400 break-all">{order.orderId}</p>
+            <h3 className="font-semibold mb-3 text-gray-900">Thông tin giao hàng</h3>
+            <OrderShippingDetails
+              recipientName={order.recipientName}
+              phoneNumber={order.phoneNumber}
+              deliveryAddress={order.deliveryAddress}
+              valueClassName="text-gray-800"
+            />
           </div>
         </div>
 
@@ -167,16 +203,37 @@ export default function OrderDetailPage() {
             );
           })}
 
-          {(showApprove || showReject) && (
+          {showOnHoldActions && (
+            <div className="flex gap-3 mt-6">
+              <button
+                type="button"
+                onClick={handleRejectOpen}
+                disabled={busy}
+                className="flex-1 py-2 border border-orange-300 text-orange-600 rounded-lg hover:bg-orange-50 transition-colors disabled:opacity-50"
+              >
+                {rejectLoading ? 'Đang xử lý...' : 'Huỷ đơn'}
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleResumeFromHold()}
+                disabled={busy}
+                className="flex-1 py-2 bg-amber-600 text-white rounded-lg font-medium hover:bg-amber-700 transition-colors disabled:opacity-50"
+              >
+                {resumeHoldLoading ? 'Đang xử lý...' : 'Tiếp tục xử lý'}
+              </button>
+            </div>
+          )}
+
+          {(showApprove || showReject) && !showOnHoldActions && (
             <div className={`flex gap-3 mt-6 ${showReject ? '' : 'justify-end'}`}>
               {showReject && (
                 <button
                   type="button"
-                  onClick={handleReject}
-                  disabled={processing}
+                  onClick={handleRejectOpen}
+                  disabled={busy}
                   className="flex-1 py-2 border border-orange-300 text-orange-600 rounded-lg hover:bg-orange-50 transition-colors disabled:opacity-50"
                 >
-                  {processing ? 'Đang xử lý...' : 'Huỷ đơn'}
+                  {rejectLoading || processing ? 'Đang xử lý...' : 'Huỷ đơn'}
                 </button>
               )}
 
@@ -184,7 +241,7 @@ export default function OrderDetailPage() {
                 <button
                   type="button"
                   onClick={handleApprove}
-                  disabled={processing}
+                  disabled={busy}
                   className={
                     showReject
                       ? 'flex-1 py-2 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700 transition-colors disabled:opacity-50'
@@ -203,16 +260,16 @@ export default function OrderDetailPage() {
         </div>
       </div>
       </div>
-      {modalOpen && (
-        <ConfirmModal
-          open={modalOpen}
-          title="Huỷ đơn"
-          description="Bạn có chắc muốn hủy đơn này? Đơn hàng sẽ chuyển sang trạng thái Đã hủy."
-          confirmLabel="Hủy đơn"
-          onConfirm={handleConfirmReject}
-          onClose={() => setModalOpen(false)}
-        />
-      )}
+      <SellerCancelOrderReasonModal
+        open={cancelReasonModalOpen}
+        onOpenChange={(open) => {
+          if (!open && rejectLoading) return;
+          setCancelReasonModalOpen(open);
+        }}
+        orderSubtitle={formatOrderDisplayNameFromOrder(order)}
+        loading={rejectLoading}
+        onConfirm={handleRejectConfirm}
+      />
     </>
   );
 }

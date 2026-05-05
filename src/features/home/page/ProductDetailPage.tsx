@@ -19,7 +19,7 @@ export default function ProductDetailPage() {
   const productName = product?.name || (isLoading ? 'Đang tải...' : `Sản phẩm #${safeId}`);
 
   const breadcrumbItems = [
-    { label: 'Cửa hàng', link: '/shop' },
+    { label: 'Sản phẩm', link: '/shop' },
     { label: productName, link: '' }, // 🌟 Hiển thị tên ở đây
   ];
 

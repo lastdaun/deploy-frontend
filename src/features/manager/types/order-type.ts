@@ -83,10 +83,19 @@ export interface Order {
     | 'READY_TO_SHIP'
     | 'DELIVERING'
     | 'DELIVERED'
+    | 'COMPLETED'
     | 'SHIPPED'
     | 'CANCELLED';
   /** ISO từ API — sort FIFO cùng nhóm trạng thái */
   createdAt?: string;
+  deliveredImageUrl?: string | null;
+  /** Lý do hủy (khách/API) — khi có, hiển thị trong modal chi tiết */
+  cancellationReason?: string | null;
+  cancelledAt?: string | null;
+  cancelledBy?: string | null;
+  /** Lý do tạm giữ (vận hành) */
+  operationalHoldReason?: string | null;
+  statusBeforeHold?: string | null;
   totalAmount: number;
   depositAmount: number;
   remainingAmount: number | null;
@@ -94,10 +103,8 @@ export interface Order {
   items: OrderItem[];
   payments: Payment[];
   shipperInfo: ShipperInfo | null;
-  comboId: string | null;
   comboName: string | null;
   comboDiscountAmount: number | null;
-  comboSnapshot: string | null;
   refundedAmount: number;
   finalTotalAfterRefund: number;
   bankInfo: BankInfo;
@@ -271,6 +278,13 @@ export const STATUS_CONFIG: Record<string, StatusConfig> = {
     text: 'text-emerald-800',
     dot: 'bg-emerald-600',
     className: 'bg-emerald-100 text-emerald-800 border-none',
+  },
+  COMPLETED: {
+    label: 'Đã hoàn tất',
+    bg: 'bg-teal-100',
+    text: 'text-teal-800',
+    dot: 'bg-teal-600',
+    className: 'bg-teal-100 text-teal-800 border-none',
   },
   CANCELLED: {
     label: 'Đã hủy',

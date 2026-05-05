@@ -1,5 +1,6 @@
 import React from 'react';
-import { CreditCard, MapPin, Phone, DollarSign } from 'lucide-react';
+import { CreditCard, DollarSign } from 'lucide-react';
+import { OrderShippingDetails } from '@/components/order/OrderShippingDetails';
 import type { BEOrder } from '@/features/operation-staff/types/types';
 
 interface PaymentInfoSectionProps {
@@ -20,13 +21,6 @@ const PaymentInfoSection: React.FC<PaymentInfoSectionProps> = ({ order }) => {
     }).format(amount);
   };
 
-  const displayValue = (
-    value: string | null | undefined,
-    fallback: string = 'Chưa có thông tin',
-  ) => {
-    return value || fallback;
-  };
-
   return (
     <section>
       <div className="flex items-center gap-2 mb-4">
@@ -37,29 +31,11 @@ const PaymentInfoSection: React.FC<PaymentInfoSectionProps> = ({ order }) => {
       </div>
 
       <div className="bg-white dark:bg-[#1a2e22] rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 space-y-4">
-        {/* Delivery Address */}
-        <div className="flex items-start gap-3">
-          <MapPin className="w-5 h-5 text-slate-400 mt-0.5" />
-          <div className="flex-1">
-            <p className="text-sm font-medium text-slate-600 dark:text-slate-400">
-              Địa chỉ giao hàng
-            </p>
-            <p className="text-slate-900 dark:text-white font-medium">
-              {displayValue(order.deliveryAddress)}
-            </p>
-          </div>
-        </div>
-
-        {/* Phone Number */}
-        <div className="flex items-start gap-3">
-          <Phone className="w-5 h-5 text-slate-400 mt-0.5" />
-          <div className="flex-1">
-            <p className="text-sm font-medium text-slate-600 dark:text-slate-400">Số điện thoại</p>
-            <p className="text-slate-900 dark:text-white font-medium">
-              {displayValue(order.phoneNumber)}
-            </p>
-          </div>
-        </div>
+        <OrderShippingDetails
+          recipientName={order.recipientName}
+          phoneNumber={order.phoneNumber}
+          deliveryAddress={order.deliveryAddress}
+        />
 
         {/* Payment Details */}
         <div className="border-t border-slate-200 dark:border-slate-700 pt-4 space-y-3">

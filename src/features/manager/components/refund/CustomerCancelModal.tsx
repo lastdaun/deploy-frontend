@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import { useCancelledPaidOrders, useCreateBatch } from '../../hooks/useRefunds';
 import { fmt, getProductName } from '@/lib/utils';
+import { formatOrderDisplayNameFromOrder } from '@/lib/orderDisplayName';
 import type { Order } from '../../types/refund';
 
 export function CustomerCancelModal({ onClose }: { onClose: () => void }) {
@@ -157,10 +158,10 @@ export function CustomerCancelModal({ onClose }: { onClose: () => void }) {
                       />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-bold text-gray-800 truncate">
-                          {name ?? order.orderName ?? 'Đơn không tên'}
+                          {name ?? formatOrderDisplayNameFromOrder(order)}
                         </p>
-                        <p className="text-[11px] text-gray-500 font-mono mt-0.5 uppercase tracking-wider">
-                          #{(order.orderId ?? '').slice(-8)} • {order.phoneNumber}
+                        <p className="text-[11px] text-gray-500 font-mono mt-0.5 uppercase tracking-wider truncate">
+                          {formatOrderDisplayNameFromOrder(order)} · {order.phoneNumber}
                         </p>
                       </div>
                       <div className="text-right shrink-0">

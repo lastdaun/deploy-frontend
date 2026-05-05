@@ -3,7 +3,10 @@ import { Filter } from 'lucide-react';
 import OrdersTabs from './OrdersTabs';
 import type { TabItem, BEOrderStatus } from '@/features/operation-staff/types/types';
 
-type StatusFilterId = 'CONFIRMED' | 'PROCESSING' | 'READY_TO_SHIP';
+type StatusFilterId =
+  | 'CONFIRMED'
+  | 'PROCESSING'
+  | 'READY_TO_SHIP';
 
 type StatusOption = {
   id: StatusFilterId;

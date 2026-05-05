@@ -92,6 +92,11 @@ export function getSellerOrderStatusForDisplay(order: Parameters<typeof getOrder
   return getOrderStatusForShopDisplay(order);
 }
 
+/** Đơn đang tạm giữ (ON_HOLD) — sale có thể hủy (modal lý do) hoặc tiếp tục xử lý. */
+export function canSellerActOnOnHoldOrder(order: { orderStatus: string }): boolean {
+  return normalizeWorkflowOrderStatus(order.orderStatus) === 'ON_HOLD';
+}
+
 /** Chỉ các dòng IN_STOCK (không preorder) — đơn hỗn hợp preorder + thường không được huỷ từ phía sale. */
 export function orderHasOnlyInStockItems(order: { items?: { orderItemType?: string | null }[] }): boolean {
   if (!order.items?.length) return false;

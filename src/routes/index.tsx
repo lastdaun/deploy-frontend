@@ -23,6 +23,8 @@ import ProductManagePage from '@/features/manager/page/products/ProductManagePag
 import ProductVariantManagePage from '@/features/manager/page/products/ProductVariantManageage';
 import LensesManagerPage from '@/features/manager/page/Lenses/LensesManagerPage';
 import StaffCustomerPage from '@/features/admin/page/StaffCustomerPage';
+import AdminDashboardPage from '@/features/admin/page/AdminDashboardPage';
+import ManagerDashboardPage from '@/features/manager/page/dashboard/ManagerDashboardPage';
 
 import SellerOrderPage from '@/features/seller/page/order/SellerOrderPage';
 
@@ -94,7 +96,8 @@ export const router = createBrowserRouter([
           </RequireRole>
         ),
         children: [
-          { index: true, element: <StaffCustomerPage /> },
+          { index: true, element: <AdminDashboardPage /> },
+          { path: 'users', element: <StaffCustomerPage /> },
         ],
       },
 
@@ -108,7 +111,8 @@ export const router = createBrowserRouter([
           </RequireRole>
         ),
         children: [
-          { index: true, element: <Navigate to="/manager/orders" replace /> },
+          { index: true, element: <Navigate to="/manager/dashboard" replace /> },
+          { path: 'dashboard', element: <ManagerDashboardPage /> },
           { path: 'orders', element: <ManagerOrderPage /> },
           { path: 'products', element: <ProductManagePage /> },
           { path: 'products/:productId/variants', element: <ProductVariantManagePage /> },
@@ -126,6 +130,8 @@ export const router = createBrowserRouter([
         ),
         children: [
           { index: true, element: <SellerOrderPage /> },
+          { path: 'orders/pending', element: <SellerOrderPage /> },
+          { path: 'orders/approved', element: <SellerOrderPage /> },
         ],
       },
 

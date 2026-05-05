@@ -2,30 +2,37 @@ import React, { useState, useEffect } from 'react';
 import { Package2, ChevronDown, ChevronUp, DollarSign } from 'lucide-react';
 import type { BEOrderItem } from '@/features/operation-staff/types/types';
 import PrescriptionSection from '@/features/operation-staff/components/dashboard/PrescriptionSection.tsx';
-import { useProductionStore } from '@/features/operation-staff/store/productionStore.ts';
 import { resolveProductImageUrl } from '@/lib/prescriptionImageUrl';
+import { useOrderDrawerStore } from '@/features/operation-staff/store/orderDrawerStore.ts';
 
 interface PickingListSectionProps {
   items: BEOrderItem[];
   orderStatus?: string;
   orderId?: string;
-  /** Gọi khi đủ điều kiện hiện "Hoàn thành" ở footer (đơn CONFIRMED, đã bấm xử lý hết từng dòng) */
-  onConfirmedItemsReadyChange?: (allLineItemsProcessed: boolean) => void;
+  /** Đồng bộ tiến độ thao tác theo từng dòng để footer quyết định hiện nút. */
+  onItemActionProgressChange?: (progress: { hasAnyProcessed: boolean; allProcessed: boolean }) => void;
 }
 
 const PickingListSection: React.FC<PickingListSectionProps> = ({
   items,
   orderStatus,
   orderId,
-  onConfirmedItemsReadyChange,
+  onItemActionProgressChange,
 }) => {
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
-  const [requestedItemIds, setRequestedItemIds] = useState<Set<string>>(new Set());
   const [requestingItemId, setRequestingItemId] = useState<string | null>(null);
-  const [processedItemIds, setProcessedItemIds] = useState<Set<string>>(new Set());
   const [processingItem, setProcessingItem] = useState<string | null>(null);
   const [brokenProductImages, setBrokenProductImages] = useState<Set<string>>(new Set());
-  const { requestStock, startOrder } = useProductionStore();
+  const itemActionsByOrder = useOrderDrawerStore((state) => state.itemActionsByOrder);
+  const markRequestedItem = useOrderDrawerStore((state) => state.markRequestedItem);
+  const markProcessedItem = useOrderDrawerStore((state) => state.markProcessedItem);
+
+  const requestedItemIds = new Set(
+    orderId ? (itemActionsByOrder[orderId]?.requestedItemIds ?? []) : [],
+  );
+  const processedItemIds = new Set(
+    orderId ? (itemActionsByOrder[orderId]?.processedItemIds ?? []) : [],
+  );
 
   // PRE_ORDER trên dòng hàng = loại sản phẩm (đặt trước / có sẵn), không phải orderStatus. PREORDER_CONFIRMED = đơn có ít nhất một dòng PRE_ORDER đã được sale xác nhận.
   const isPreOrderStatus = orderStatus === 'PREORDER_CONFIRMED';
@@ -33,47 +40,51 @@ const PickingListSection: React.FC<PickingListSectionProps> = ({
   const isDone = orderStatus === 'READY_TO_SHIP';
 
   useEffect(() => {
-    setRequestedItemIds(new Set());
-    setProcessedItemIds(new Set());
     setRequestingItemId(null);
     setProcessingItem(null);
     setBrokenProductImages(new Set());
   }, [orderId]);
 
   useEffect(() => {
-    if (orderStatus !== 'CONFIRMED' || !onConfirmedItemsReadyChange) return;
-    const list = items ?? [];
-    const ready = list.length === 0 || list.every((i) => processedItemIds.has(i.orderItemId));
-    onConfirmedItemsReadyChange(ready);
-  }, [orderStatus, items, processedItemIds, onConfirmedItemsReadyChange]);
+    if (!onItemActionProgressChange) return;
 
-  // Items phân theo loại
-  const preOrderItems = items?.filter((i) => i.orderItemType === 'PRE_ORDER') ?? [];
-  const inStockItems = items?.filter((i) => i.orderItemType !== 'PRE_ORDER') ?? [];
+    const list = items ?? [];
+    const actionableItems = list.filter((item) => {
+      const isItemPreOrder = item.orderItemType === 'PRE_ORDER';
+      const needsStock = isPreOrderStatus && isItemPreOrder;
+      const canProcess = isConfirmed || (isPreOrderStatus && !isItemPreOrder);
+      return needsStock || canProcess;
+    });
+
+    if (actionableItems.length === 0) {
+      onItemActionProgressChange({ hasAnyProcessed: false, allProcessed: false });
+      return;
+    }
+
+    const handledCount = actionableItems.filter(
+      (item) => requestedItemIds.has(item.orderItemId) || processedItemIds.has(item.orderItemId),
+    ).length;
+
+    onItemActionProgressChange({
+      hasAnyProcessed: handledCount > 0,
+      allProcessed: handledCount === actionableItems.length,
+    });
+  }, [
+    items,
+    requestedItemIds,
+    processedItemIds,
+    isPreOrderStatus,
+    isConfirmed,
+    onItemActionProgressChange,
+  ]);
 
   const handleProcessItem = async (orderItemId: string) => {
     if (!orderId || processingItem) return;
     setProcessingItem(orderItemId);
     try {
-      const newProcessedIds = new Set(processedItemIds);
-      newProcessedIds.add(orderItemId);
-      setProcessedItemIds(newProcessedIds);
-
-      // Gọi API khi tất cả IN_STOCK items đã được xử lý
-      const targetItems = isPreOrderStatus ? inStockItems : items ?? [];
-      const processedInStock = [...newProcessedIds].filter((id) =>
-        targetItems.some((i) => i.orderItemId === id),
-      );
-      if (processedInStock.length >= targetItems.length && targetItems.length > 0) {
-        await startOrder(orderId);
-      }
+      markProcessedItem(orderId, orderItemId);
     } catch (error) {
       console.error('Failed to start order:', error);
-      setProcessedItemIds((prev) => {
-        const s = new Set(prev);
-        s.delete(orderItemId);
-        return s;
-      });
     } finally {
       setProcessingItem(null);
     }
@@ -83,24 +94,9 @@ const PickingListSection: React.FC<PickingListSectionProps> = ({
     if (!orderId || requestingItemId) return;
     setRequestingItemId(orderItemId);
     try {
-      const newRequestedIds = new Set(requestedItemIds);
-      newRequestedIds.add(orderItemId);
-      setRequestedItemIds(newRequestedIds);
-
-      // Gọi API khi tất cả PRE_ORDER items đã được request
-      const requestedPreOrder = [...newRequestedIds].filter((id) =>
-        preOrderItems.some((i) => i.orderItemId === id),
-      );
-      if (requestedPreOrder.length >= preOrderItems.length && preOrderItems.length > 0) {
-        await requestStock(orderId);
-      }
+      markRequestedItem(orderId, orderItemId);
     } catch (error) {
       console.error('Failed to request stock:', error);
-      setRequestedItemIds((prev) => {
-        const s = new Set(prev);
-        s.delete(orderItemId);
-        return s;
-      });
     } finally {
       setRequestingItemId(null);
     }
@@ -197,7 +193,7 @@ const PickingListSection: React.FC<PickingListSectionProps> = ({
                   if (needsStock) {
                     return alreadyRequested ? (
                       <span className="inline-flex items-center px-3 py-2 rounded-lg text-xs font-bold bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-200">
-                        Đang xử lý đơn hàng
+                        Đang xử lý
                       </span>
                     ) : (
                       <>
@@ -218,7 +214,7 @@ const PickingListSection: React.FC<PickingListSectionProps> = ({
                   if (canProcess) {
                     return alreadyProcessed ? (
                       <span className="inline-flex items-center px-3 py-2 rounded-lg text-xs font-bold bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-200">
-                        Đang xử lý đơn hàng
+                        Đang xử lý
                       </span>
                     ) : (
                       <button
@@ -226,14 +222,14 @@ const PickingListSection: React.FC<PickingListSectionProps> = ({
                         disabled={processingItem === item.orderItemId}
                         className="inline-flex items-center px-3 py-2 rounded-lg text-xs font-bold bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                        {processingItem === item.orderItemId ? 'Đang xử lý...' : 'Xử lý đơn hàng'}
+                        {processingItem === item.orderItemId ? 'Đang xử lý...' : isConfirmed ? 'Chuẩn bị hàng' : 'Xử lý đơn hàng'}
                       </button>
                     );
                   }
 
                   return (
                     <span className="inline-flex items-center px-3 py-2 rounded-lg text-xs font-bold bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-200">
-                      Đang xử lý đơn hàng
+                      Đang xử lý
                     </span>
                   );
                 })()}
@@ -302,14 +298,6 @@ const PickingListSection: React.FC<PickingListSectionProps> = ({
                     </span>
                     <span className="text-sm font-medium text-slate-900 dark:text-white">
                       {displayValue(item.lensPrice)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-sm text-slate-600 dark:text-slate-400">
-                      Tổng giá tròng kính:
-                    </span>
-                    <span className="text-sm font-medium text-slate-900 dark:text-white">
-                      {displayValue(item.lensPriceTotal)}
                     </span>
                   </div>
                   <div className="flex justify-between">

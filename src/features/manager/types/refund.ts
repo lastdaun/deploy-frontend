@@ -84,10 +84,8 @@ export interface Order {
   items: OrderItem[];
   payments: Payment[];
   shipperInfo: ShipperInfo;
-  comboId: string;
   comboName: string;
   comboDiscountAmount: number;
-  comboSnapshot: string;
   refundedAmount: number;
   finalTotalAfterRefund: number;
   bankInfo: BankInfo;

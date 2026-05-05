@@ -3,10 +3,15 @@ import { api } from '@/lib/axios';
 /* ====== TYPE ====== */
 export interface Order {
   orderId: string;
+  createdAt?: string;
+  /** Tên/API hiển thị — UI dùng `formatOrderDisplayNameFromOrder`: ORDER|PREORDER - SP (+ Lens) - mã ngắn */
+  orderName?: string | null;
   customerId: string;
+  recipientName?: string | null;
   phoneNumber: string;
   deliveryAddress: string;
-  orderStatus: 'PAID' | 'AWAITING_VERIFICATION';
+  /** Chi tiết từ management API — đủ các trạng thái */
+  orderStatus: string;
   totalAmount: number;
   depositAmount: number;
   /** Còn nợ 0 = đã thanh toán đủ (preorder) */
@@ -86,5 +91,11 @@ export const orderApi = {
       orderStatus: string;
       preOrderStatus?: string | null;
     };
+  },
+
+  /** Khôi phục đơn ON_HOLD về trạng thái workflow trước tạm giữ (operation tiếp tục xử lý). */
+  resumeFromOperationalHold: async (orderId: string): Promise<unknown> => {
+    const res = await api.put(`/management/orders/${orderId}/resume-from-hold`);
+    return res.data?.result ?? res.data?.Result;
   },
 };

@@ -1,20 +1,24 @@
 import React from 'react';
 import PickingListSection from './PickingListSection';
 import { useProductionStore } from '@/features/operation-staff/store/productionStore.ts';
+import { useOrderDrawerStore } from '@/features/operation-staff/store/orderDrawerStore.ts';
 
 interface DrawerContentProps {
   orderId: string;
   isOpen: boolean;
-  onConfirmedItemsReadyChange?: (ready: boolean) => void;
+  onItemActionProgressChange?: (progress: { hasAnyProcessed: boolean; allProcessed: boolean }) => void;
 }
 
 const DrawerContent: React.FC<DrawerContentProps> = ({
   orderId,
   isOpen,
-  onConfirmedItemsReadyChange,
+  onItemActionProgressChange,
 }) => {
   const { processingOrders } = useProductionStore();
-  const order = processingOrders.find((o) => o.orderId === orderId);
+  const selectedOrder = useOrderDrawerStore((state) => state.selectedOrder);
+  const order =
+    processingOrders.find((o) => o.orderId === orderId) ??
+    (selectedOrder?.orderId === orderId ? selectedOrder : undefined);
 
   if (!order) {
     return null;
@@ -30,7 +34,7 @@ const DrawerContent: React.FC<DrawerContentProps> = ({
         items={order.items}
         orderStatus={order.orderStatus}
         orderId={order.orderId}
-        onConfirmedItemsReadyChange={onConfirmedItemsReadyChange}
+        onItemActionProgressChange={onItemActionProgressChange}
       />
       {/*<PaymentInfoSection order={order} />*/}
       {/*<PrescriptionSection prescription={order.items?.[0]?.prescription} />*/}

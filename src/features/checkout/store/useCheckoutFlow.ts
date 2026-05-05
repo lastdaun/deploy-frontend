@@ -4,9 +4,11 @@ import { useCheckoutStore } from '@/features/checkout/store/useCheckoutStore';
 import { toast } from 'sonner';
 import axios from 'axios';
 import { paymentApi } from '../api/checkout-api';
+import { useNavigate } from 'react-router-dom';
 
 export const useCheckoutFlow = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const navigate = useNavigate();
 
   const { step, setStep, nextStep, prevStep, shippingData, paymentMethod, bankInfo } =
     useCheckoutStore();
@@ -79,21 +81,29 @@ export const useCheckoutFlow = () => {
       // --- BƯỚC 1: CHUẨN BỊ DATA ---
       const deliveryAddress = `${shippingData.address || ''}`.trim();
 
+      const finiteOrZero = (v: unknown) => {
+        const n = typeof v === 'number' ? v : parseFloat(String(v ?? '').trim());
+        return Number.isFinite(n) ? n : 0;
+      };
+
+      /** Trục (độ): backend lưu int; tránh gửi số lẻ gây lỗi deserialize. */
+      const axisDegrees = (v: unknown) => Math.round(finiteOrZero(v));
+
       const orderItems = items.map((item) => {
         let mappedPrescription = null;
         if (item.prescription) {
           const p = item.prescription;
           mappedPrescription = {
-            odSphere: parseFloat(p.od?.sphere) || 0,
-            odCylinder: parseFloat(p.od?.cylinder) || 0,
-            odAxis: parseFloat(p.od?.axis) || 0,
-            odAdd: parseFloat(p.od?.add) || 0,
-            odPd: parseFloat(p.od?.pd) || 0,
-            osSphere: parseFloat(p.os?.sphere) || 0,
-            osCylinder: parseFloat(p.os?.cylinder) || 0,
-            osAxis: parseFloat(p.os?.axis) || 0,
-            osAdd: parseFloat(p.os?.add) || 0,
-            osPd: parseFloat(p.os?.pd) || 0,
+            odSphere: finiteOrZero(p.od?.sphere),
+            odCylinder: finiteOrZero(p.od?.cylinder),
+            odAxis: axisDegrees(p.od?.axis),
+            odAdd: finiteOrZero(p.od?.add),
+            odPd: finiteOrZero(p.od?.pd),
+            osSphere: finiteOrZero(p.os?.sphere),
+            osCylinder: finiteOrZero(p.os?.cylinder),
+            osAxis: axisDegrees(p.os?.axis),
+            osAdd: finiteOrZero(p.os?.add),
+            osPd: finiteOrZero(p.os?.pd),
             note: p.notes || '',
           };
         }
@@ -115,44 +125,121 @@ export const useCheckoutFlow = () => {
         recipientName: shippingData.name,
         phoneNumber: shippingData.phone,
         items: orderItems,
-        comboId: null,
         bankInfo: validBankInfo,
       };
 
       const formData = new FormData();
       formData.append('orderInfo', JSON.stringify(orderInfo));
 
-      // --- Ảnh đơn khám: ưu tiên File thật (multipart), không gửi base64 nếu đã có file ---
-      const itemWithImage = items.find(
-        (item) => item.prescription?.imageFile || item.prescription?.imageUrl,
-      );
-      const p = itemWithImage?.prescription;
-      if (p?.imageFile && p.imageFile instanceof File) {
-        if (p.imageFile.size > 5 * 1024 * 1024) {
-          toast.error('Ảnh đơn khám mắt không được vượt quá 5MB', { id: toastId });
-          setIsSubmitting(false);
-          return;
+      // --- BƯỚC 2: TẠO ĐƠN HÀNG (SỬ DỤNG API ĐÃ TÁCH) ---
+      const orderResponseData = await paymentApi.createOrder(formData, paymentMethod);
+      const createdOrder = orderResponseData?.result ?? orderResponseData;
+      const actualOrderId = createdOrder?.orderId;
+
+      if (!actualOrderId) throw new Error('Không lấy được mã đơn hàng.');
+
+      // --- BƯỚC 2.1: Upload ảnh đơn khám cho từng dòng hàng (nếu có) ---
+      type CreatedOrderItem = {
+        orderItemId: string;
+        productVariantId: string | null;
+        lensId: string | null;
+        quantity: number;
+      };
+
+      const createdItems: CreatedOrderItem[] = Array.isArray(createdOrder?.items)
+        ? createdOrder.items
+            .filter((it: unknown): it is Record<string, unknown> => typeof it === 'object' && it !== null)
+            .map((it: Record<string, unknown>) => ({
+              orderItemId: String(it.orderItemId ?? ''),
+              productVariantId: it.productVariantId ? String(it.productVariantId) : null,
+              lensId: it.lensId ? String(it.lensId) : null,
+              quantity: Number(it.quantity ?? 0),
+            }))
+            .filter((it: CreatedOrderItem) => !!it.orderItemId)
+        : [];
+
+      const uploadedOrderItemIds = new Set<string>();
+      let uploadFailedCount = 0;
+
+      const normalizeNullable = (value: unknown): string | null => {
+        if (value === null || value === undefined) return null;
+        const text = String(value).trim();
+        return text === '' ? null : text;
+      };
+
+      const toUploadFile = async (
+        prescription: (typeof items)[number]['prescription'],
+      ): Promise<{ file: File | Blob; fileName?: string } | null> => {
+        if (!prescription) return null;
+
+        if (prescription.imageFile && prescription.imageFile instanceof File) {
+          if (prescription.imageFile.size > 5 * 1024 * 1024) {
+            throw new Error('Ảnh đơn khám mắt không được vượt quá 5MB');
+          }
+          return { file: prescription.imageFile, fileName: prescription.imageFile.name };
         }
-        formData.append('prescriptionImage', p.imageFile, p.imageFile.name);
-      } else {
-        const imageUrl = p?.imageUrl;
+
+        const imageUrl = prescription.imageUrl;
         if (imageUrl && (imageUrl.startsWith('data:image/') || imageUrl.startsWith('blob:'))) {
           const response = await fetch(imageUrl);
           const blobData = await response.blob();
           if (blobData.size > 5 * 1024 * 1024) {
-            toast.error('Ảnh đơn khám mắt không được vượt quá 5MB', { id: toastId });
-            setIsSubmitting(false);
-            return;
+            throw new Error('Ảnh đơn khám mắt không được vượt quá 5MB');
           }
-          formData.append('prescriptionImage', blobData, 'prescription.jpg');
+          return { file: blobData, fileName: 'prescription.jpg' };
+        }
+
+        return null;
+      };
+
+      for (const cartItem of items) {
+        const uploadPayload = await toUploadFile(cartItem.prescription);
+        if (!uploadPayload) continue;
+
+        const cartVariantId = normalizeNullable(cartItem.productId);
+        const cartLensId = normalizeNullable(cartItem.lensId);
+        const cartQty = Number(cartItem.quantity ?? 0);
+
+        const exactMatch = createdItems.find(
+          (it) =>
+            !uploadedOrderItemIds.has(it.orderItemId) &&
+            normalizeNullable(it.productVariantId) === cartVariantId &&
+            normalizeNullable(it.lensId) === cartLensId &&
+            Number(it.quantity) === cartQty,
+        );
+
+        const fallbackMatch = exactMatch
+          ? null
+          : createdItems.find(
+              (it) =>
+                !uploadedOrderItemIds.has(it.orderItemId) &&
+                normalizeNullable(it.productVariantId) === cartVariantId &&
+                normalizeNullable(it.lensId) === cartLensId,
+            );
+
+        const targetItem = exactMatch ?? fallbackMatch;
+        if (!targetItem) {
+          uploadFailedCount += 1;
+          continue;
+        }
+
+        try {
+          await paymentApi.uploadPrescriptionImage(
+            targetItem.orderItemId,
+            uploadPayload.file,
+            uploadPayload.fileName,
+          );
+          uploadedOrderItemIds.add(targetItem.orderItemId);
+        } catch {
+          uploadFailedCount += 1;
         }
       }
 
-      // --- BƯỚC 2: TẠO ĐƠN HÀNG (SỬ DỤNG API ĐÃ TÁCH) ---
-      const orderResponseData = await paymentApi.createOrder(formData, paymentMethod);
-      const actualOrderId = orderResponseData?.result?.orderId || orderResponseData?.orderId;
-
-      if (!actualOrderId) throw new Error('Không lấy được mã đơn hàng.');
+      if (uploadFailedCount > 0) {
+        toast.warning('Một số ảnh đơn khám chưa gắn được vào từng sản phẩm.', {
+          id: `${toastId}-prescription-upload-warning`,
+        });
+      }
 
       // --- BƯỚC 3: XỬ LÝ THANH TOÁN (SỬ DỤNG API ĐÃ TÁCH) ---
       if (paymentMethod === 'VNPAY') {
@@ -179,7 +266,7 @@ export const useCheckoutFlow = () => {
 
         setTimeout(() => {
           setIsSubmitting(false);
-          window.location.href = '/';
+          navigate(`/checkout/success?orderId=${encodeURIComponent(String(actualOrderId))}`);
         }, 2000);
       }
     } catch (error: unknown) {

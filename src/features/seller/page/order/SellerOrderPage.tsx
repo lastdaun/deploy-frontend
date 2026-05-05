@@ -11,10 +11,11 @@ import {
   Eye,
   CheckCircle,
   XCircle,
+  PlayCircle,
 } from 'lucide-react';
 import { STATUS_CONFIG, type Order, type OrderPageResponse } from '@/features/manager/types/order-type';
 import { OrderDetailModal } from '@/features/manager/components/oder/OrderDetailModal';
-import ConfirmModal from '@/features/operation-staff/components/common/ConfirmModal.tsx';
+import { SellerCancelOrderReasonModal } from '@/features/seller/components/SellerCancelOrderReasonModal';
 
 import { Badge } from '@/components/ui/badge';
 import {
@@ -25,12 +26,20 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { sortOrdersByCreatedAtDesc } from '@/lib/orderSort';
+import { sortOrdersByCreatedAtDesc, ORDER_LIST_SORT_HINT_NEWEST_FIRST } from '@/lib/orderSort';
+import { formatOrderDisplayNameFromOrder } from '@/lib/orderDisplayName';
+import { formatOrderCreatedAtLabel } from '@/lib/formatOrderCreatedAt';
+import {
+  MANAGEMENT_ORDER_LIST_VISIBLE_STATUSES,
+  MANAGEMENT_ORDER_PROCESSING_GROUP_STATUSES,
+  MANAGEMENT_ORDER_STATUS_FILTER_OPTIONS,
+} from '@/features/manager/constants/managementOrderList';
 import {
   canSellerRejectOrder,
   canSellerVerifyOrder,
   getSellerOrderStatusForDisplay,
   orderHasPreorderItem,
+  canSellerActOnOnHoldOrder,
 } from '@/features/seller/utils/orderGuards';
 import { orderApi as managementOrderApi } from '@/features/manager/api/order-api';
 
@@ -53,29 +62,6 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-// ─── SELLER STATUS FILTER OPTIONS ────────────────────────────
-const SELLER_STATUS_FILTER: Record<string, string> = {
-  ALL: 'Tất cả trạng thái',
-  PENDING: 'Chờ xác nhận',
-  PAID: 'Đã thanh toán',
-  CONFIRMED: 'Đã xác nhận',
-  PREORDER_CONFIRMED: 'Đã xác nhận preorder',
-  CANCELLED: 'Đã hủy',
-};
-
-const SELLER_HIDDEN_STATUSES = new Set([
-  'STOCK_REQUESTED',
-  'STOCK_READY',
-  'IN_PRODUCTION',
-  'PROCESSING',
-  'PREPARING',
-  'PRODUCED',
-  'READY_TO_SHIP',
-  'DELIVERING',
-  'DELIVERED',
-]);
-
-// ─── PAGE ────────────────────────────────────────────────────
 const CLIENT_PAGE_SIZE = 10;
 export default function SellerOrderPage() {
   const queryClient = useQueryClient();
@@ -83,28 +69,38 @@ export default function SellerOrderPage() {
   const [clientPage, setClientPage] = useState(0);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
+  const [rejectLoading, setRejectLoading] = useState(false);
+  const [resumeHoldLoading, setResumeHoldLoading] = useState(false);
+  const [cancelReasonModalOpen, setCancelReasonModalOpen] = useState(false);
+  const [pendingRejectOrderId, setPendingRejectOrderId] = useState<string | null>(null);
   const [orderDetailLoadingId, setOrderDetailLoadingId] = useState<string | null>(null);
 
   const ordersQueryParams = useMemo(
     () =>
       ({
         page: 0,
-        size: 200,
+        size: 500,
         sortBy: 'createdAt' as const,
         sortDir: 'desc' as const,
       }) satisfies Parameters<typeof useOrders>[0],
     [],
   );
 
-  // Fetch tất cả đơn (size lớn), lọc theo trạng thái hiển thị seller (preorder + PENDING → PAID)
+  // Gọi danh sách management, rồi lọc cùng tập trạng thái với trang quản lý
   const { orders: rawOrders, loading } = useOrders(ordersQueryParams);
 
   const orders = useMemo(() => {
-    const visible = rawOrders.filter((o) => !SELLER_HIDDEN_STATUSES.has(o.orderStatus));
+    const visible = rawOrders.filter((o) => MANAGEMENT_ORDER_LIST_VISIBLE_STATUSES.has(o.orderStatus));
     const byFilter =
       statusFilter === 'ALL'
         ? visible
-        : visible.filter((o) => getSellerOrderStatusForDisplay(o) === statusFilter);
+        : statusFilter === 'PROCESSING'
+          ? visible.filter((o) => MANAGEMENT_ORDER_PROCESSING_GROUP_STATUSES.has(o.orderStatus))
+          : statusFilter === 'PENDING'
+            ? visible.filter((o) => getSellerOrderStatusForDisplay(o) === 'PENDING')
+            : statusFilter === 'PAID'
+              ? visible.filter((o) => getSellerOrderStatusForDisplay(o) === 'PAID')
+              : visible.filter((o) => o.orderStatus === statusFilter);
     return sortOrdersByCreatedAtDesc(byFilter);
   }, [rawOrders, statusFilter]);
 
@@ -159,41 +155,51 @@ export default function SellerOrderPage() {
     }
   };
 
-  const handleReject = async (orderId: string) => {
-    setModalConfig({
-      open: true,
-      title: 'Hủy đơn hàng',
-      description: 'Bạn có chắc muốn hủy đơn hàng này? Đơn sẽ bị hủy và tồn kho sẽ được hoàn lại.',
-      confirmLabel: 'Hủy đơn',
-      destructive: true,
-      onConfirm: async () => {
-        setModalConfig({ open: false });
-        setActionLoading(true);
-        try {
-          await orderApi.rejectOrder(orderId);
-          await mergeOrderRowFromServer(orderId);
-          toast.success('Đã hủy đơn hàng!');
-          setSelectedOrder(null);
-          await refreshOrders();
-        } catch (error) {
-          console.error('Cancel error:', error);
-          toast.error('Có lỗi xảy ra, vui lòng thử lại.');
-        } finally {
-          setActionLoading(false);
-        }
-      },
-    });
+  const handleRejectOpen = (orderId: string) => {
+    setPendingRejectOrderId(orderId);
+    setCancelReasonModalOpen(true);
   };
 
-  const [modalConfig, setModalConfig] = useState<{
-    open: boolean;
-    title?: string;
-    description?: string;
-    confirmLabel?: string;
-    cancelLabel?: string;
-    destructive?: boolean;
-    onConfirm?: () => void;
-  }>({ open: false });
+  const handleResumeFromHold = async (orderId: string) => {
+    setResumeHoldLoading(true);
+    try {
+      await orderApi.resumeFromOperationalHold(orderId);
+      await mergeOrderRowFromServer(orderId);
+      toast.success('Đã tiếp tục xử lý đơn — vận hành có thể làm tiếp.');
+      setSelectedOrder(null);
+      await refreshOrders();
+    } catch (error) {
+      console.error('Resume from hold:', error);
+      toast.error('Có lỗi xảy ra, vui lòng thử lại.');
+    } finally {
+      setResumeHoldLoading(false);
+    }
+  };
+
+  const cancelModalSubtitle =
+    pendingRejectOrderId && selectedOrder?.orderId === pendingRejectOrderId
+      ? formatOrderDisplayNameFromOrder(selectedOrder)
+      : null;
+
+  const handleRejectConfirm = async (reason: string) => {
+    const orderId = pendingRejectOrderId;
+    if (!orderId) return;
+    setRejectLoading(true);
+    try {
+      await orderApi.rejectOrder(orderId, reason);
+      await mergeOrderRowFromServer(orderId);
+      toast.success('Đã hủy đơn hàng!');
+      setCancelReasonModalOpen(false);
+      setPendingRejectOrderId(null);
+      setSelectedOrder(null);
+      await refreshOrders();
+    } catch (error) {
+      console.error('Cancel error:', error);
+      toast.error('Có lỗi xảy ra, vui lòng thử lại.');
+    } finally {
+      setRejectLoading(false);
+    }
+  };
 
   const openOrderDetail = async (o: Order) => {
     setOrderDetailLoadingId(o.orderId);
@@ -222,8 +228,8 @@ export default function SellerOrderPage() {
                 <div className="flex items-center gap-3 w-full">
                   {canSellerRejectOrder(selectedOrder) && (
                     <button
-                      onClick={() => handleReject(selectedOrder.orderId)}
-                      disabled={actionLoading}
+                      onClick={() => handleRejectOpen(selectedOrder.orderId)}
+                      disabled={actionLoading || rejectLoading || resumeHoldLoading}
                       className="flex items-center gap-2 px-5 py-2.5 rounded-xl border-2 border-red-200 text-red-600 font-bold text-xs uppercase tracking-wider hover:bg-red-50 hover:border-red-400 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <XCircle size={16} />
@@ -232,7 +238,7 @@ export default function SellerOrderPage() {
                   )}
                   <button
                     onClick={() => handleVerify(selectedOrder.orderId, true)}
-                    disabled={actionLoading}
+                    disabled={actionLoading || rejectLoading || resumeHoldLoading}
                     className={`flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs uppercase tracking-wider shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed ${canSellerRejectOrder(selectedOrder) ? 'flex-1' : 'w-full'}`}
                   >
                     <CheckCircle size={16} />
@@ -243,22 +249,44 @@ export default function SellerOrderPage() {
                         : 'Xác nhận'}
                   </button>
                 </div>
+              ) : canSellerActOnOnHoldOrder(selectedOrder) ? (
+                <div className="flex items-center gap-3 w-full">
+                  <button
+                    type="button"
+                    onClick={() => handleRejectOpen(selectedOrder.orderId)}
+                    disabled={rejectLoading || resumeHoldLoading}
+                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl border-2 border-red-200 text-red-600 font-bold text-xs uppercase tracking-wider hover:bg-red-50 hover:border-red-400 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex-1 justify-center"
+                  >
+                    <XCircle size={16} />
+                    Huỷ đơn
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleResumeFromHold(selectedOrder.orderId)}
+                    disabled={rejectLoading || resumeHoldLoading}
+                    className="flex flex-1 items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs uppercase tracking-wider shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <PlayCircle size={16} />
+                    {resumeHoldLoading ? 'Đang xử lý...' : 'Tiếp tục'}
+                  </button>
+                </div>
               ) : undefined
             }
         />
       )}
 
-      <ConfirmModal
-        open={modalConfig.open}
-        title={modalConfig.title}
-        description={modalConfig.description}
-        confirmLabel={modalConfig.confirmLabel}
-        cancelLabel={modalConfig.cancelLabel}
-        destructive={modalConfig.destructive}
-        onConfirm={() => modalConfig.onConfirm?.()}
-        onClose={() => setModalConfig({ open: false })}
+      <SellerCancelOrderReasonModal
+        open={cancelReasonModalOpen}
+        onOpenChange={(open) => {
+          if (!open && rejectLoading) return;
+          setCancelReasonModalOpen(open);
+          if (!open) setPendingRejectOrderId(null);
+        }}
+        orderSubtitle={cancelModalSubtitle}
+        loading={rejectLoading}
+        onConfirm={handleRejectConfirm}
       />
-      
+
 
       <div className="max-w-6xl mx-auto px-6 py-10">
         <header className="mb-10 flex flex-col md:flex-row md:items-end justify-between gap-6">
@@ -271,8 +299,9 @@ export default function SellerOrderPage() {
                 Xử lý đơn hàng
               </h1>
             </div>
-            <p className="text-slate-500 font-medium text-sm">
-              Xác minh và xử lý đơn hàng từ khách hàng
+            <p className="text-slate-500 font-medium text-sm">{ORDER_LIST_SORT_HINT_NEWEST_FIRST}</p>
+            <p className="text-slate-400 text-xs mt-1 font-medium">
+              {orders.length} đơn sau lọc hiển thị · phân trang {clientPage + 1}/{Math.max(1, totalPages || 1)}
             </p>
           </div>
 
@@ -284,22 +313,26 @@ export default function SellerOrderPage() {
               <SelectTrigger className="h-11 bg-white border-slate-200 rounded-xl shadow-sm focus:ring-2 focus:ring-blue-500 focus:ring-offset-0 transition-all font-semibold text-slate-700">
                 <SelectValue placeholder="Chọn trạng thái" />
               </SelectTrigger>
-              <SelectContent className="rounded-xl border-slate-100 shadow-xl max-h-[300px]">
-                {Object.entries(SELLER_STATUS_FILTER).map(([key, label]) => {
-                  const cfg = STATUS_CONFIG[key];
-                  return (
-                    <SelectItem
-                      key={key}
-                      value={key}
-                      className="font-medium text-slate-600 cursor-pointer focus:bg-blue-50 focus:text-blue-700 py-2"
-                    >
-                      <div className="flex items-center gap-2">
-                        {cfg && <span className={`w-2 h-2 rounded-full ${cfg.dot}`} />}
-                        {label}
-                      </div>
-                    </SelectItem>
-                  );
-                })}
+              <SelectContent className="rounded-xl border-slate-100 shadow-xl max-h-[320px]">
+                <SelectItem
+                  value="ALL"
+                  className="font-semibold text-slate-800 cursor-pointer focus:bg-slate-50 py-2.5"
+                >
+                  Tất cả trạng thái
+                </SelectItem>
+                <div className="h-px bg-slate-100 my-1 mx-2" />
+                {MANAGEMENT_ORDER_STATUS_FILTER_OPTIONS.map((opt) => (
+                  <SelectItem
+                    key={opt.value}
+                    value={opt.value}
+                    className="font-medium text-slate-600 cursor-pointer focus:bg-blue-50 focus:text-blue-700 py-2"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className={`w-2 h-2 rounded-full ${opt.dot}`} />
+                      {opt.label}
+                    </div>
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -310,8 +343,11 @@ export default function SellerOrderPage() {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-slate-50/50 border-b border-slate-100">
-                  <th className="pl-8 pr-4 py-5 text-[11px] font-bold text-slate-400 uppercase tracking-widest">
-                    Mã đơn
+                  <th className="pl-8 pr-4 py-5 text-[11px] font-bold text-slate-400 uppercase tracking-widest min-w-[220px]">
+                    Tên đơn hàng
+                  </th>
+                  <th className="px-4 py-5 text-[11px] font-bold text-slate-400 uppercase tracking-widest whitespace-nowrap">
+                    Ngày tạo
                   </th>
                   <th className="px-4 py-5 text-[11px] font-bold text-slate-400 uppercase tracking-widest">
                     Khách hàng
@@ -331,7 +367,7 @@ export default function SellerOrderPage() {
               >
                 {paginatedOrders.length === 0 && !loading ? (
                   <tr>
-                    <td colSpan={5} className="py-20 text-center text-slate-400 font-medium">
+                    <td colSpan={6} className="py-20 text-center text-slate-400 font-medium">
                       Không có đơn hàng nào
                     </td>
                   </tr>
@@ -345,8 +381,11 @@ export default function SellerOrderPage() {
                         void openOrderDetail(o);
                       }}
                     >
-                      <td className="pl-8 pr-4 py-5 font-bold text-slate-900 text-sm">
-                        #{o.orderId.slice(0, 8)}
+                      <td className="pl-8 pr-4 py-5 font-semibold text-slate-900 text-sm leading-snug max-w-[min(28rem,40vw)]">
+                        {formatOrderDisplayNameFromOrder(o)}
+                      </td>
+                      <td className="px-4 py-5 text-sm text-slate-600 whitespace-nowrap tabular-nums">
+                        {formatOrderCreatedAtLabel(o.createdAt)}
                       </td>
                       <td className="px-4 py-5">
                         <div className="font-bold text-slate-700 text-sm">
@@ -360,7 +399,7 @@ export default function SellerOrderPage() {
                         {fmt(o.totalAmount)}
                       </td>
                       <td className="px-4 py-5 text-center">
-                        <StatusBadge status={getSellerOrderStatusForDisplay(o)} />
+                        <StatusBadge status={o.orderStatus} />
                       </td>
                       <td className="pl-4 pr-8 py-5 text-right">
                         <div className="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 group-hover:bg-orange-600 group-hover:text-white transition-all shadow-sm group-hover:shadow-md">

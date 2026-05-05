@@ -1,22 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
 import axios from 'axios';
-import { useEffect, useState } from 'react';
 import { profileApi } from '../api/api';
 import { useAuthStore } from '@/features/auth/stores/useAuthStore';
+import { useAuthHydrated } from '@/features/auth/hooks/useAuthHydrated';
 
 export const PROFILE_QUERY_KEY = ['profile'] as const;
-
-function useAuthHydrated(): boolean {
-  const [ok, setOk] = useState(() => useAuthStore.persist.hasHydrated());
-  useEffect(() => {
-    if (useAuthStore.persist.hasHydrated()) {
-      setOk(true);
-      return;
-    }
-    return useAuthStore.persist.onFinishHydration(() => setOk(true));
-  }, []);
-  return ok;
-}
 
 export const useProfileQuery = () => {
   const authHydrated = useAuthHydrated();

@@ -26,16 +26,18 @@ import { cn } from '@/lib/utils';
 import { getOrderCollectAmount } from '@/features/shipper/utils/order-money';
 import ConfirmDeliveryModal from '@/features/shipper/components/ConfirmDeliveryModal';
 import { sortOrdersByCreatedAtDesc } from '@/lib/orderSort';
+import { formatOrderDisplayNameFromOrder } from '@/lib/orderDisplayName';
 import { orderStatusLabel, orderStatusRowPillClassName } from '@/lib/orderStatusUi';
 
 type Screen = 'select' | 'list' | 'detail';
-type StatusFilter = 'ALL' | 'READY_TO_SHIP' | 'DELIVERING' | 'DELIVERED';
+type StatusFilter = 'ALL' | 'READY_TO_SHIP' | 'DELIVERING' | 'DELIVERED' | 'COMPLETED';
 
 const STATUS_FILTER_OPTIONS: { value: StatusFilter; label: string }[] = [
   { value: 'ALL', label: 'Tất cả' },
   { value: 'READY_TO_SHIP', label: 'Sẵn sàng vận chuyển' },
   { value: 'DELIVERING', label: 'Đang giao hàng' },
   { value: 'DELIVERED', label: 'Đã giao hàng' },
+  { value: 'COMPLETED', label: 'Đã hoàn tất' },
 ];
 
 const formatCurrency = (amount: number) => new Intl.NumberFormat('vi-VN').format(amount) + '₫';
@@ -67,7 +69,7 @@ const ShipperDashboardPage: React.FC = () => {
   const deliveringCount = acceptedOrders.filter((order) =>
     ['DELIVERING', 'SHIPPED'].includes(order.orderStatus),
   ).length;
-  const completedCount = acceptedOrders.filter((order) => order.orderStatus === 'DELIVERED').length;
+  const completedCount = acceptedOrders.filter((order) => ['DELIVERED', 'COMPLETED'].includes(order.orderStatus)).length;
   const hasDeliveringOrder = acceptedOrders.some((order) =>
     ['DELIVERING', 'SHIPPED'].includes(order.orderStatus),
   );
@@ -182,6 +184,9 @@ const ShipperDashboardPage: React.FC = () => {
     if (statusFilter === 'DELIVERED') {
       return sortedAccepted.filter((o) => o.orderStatus === 'DELIVERED');
     }
+    if (statusFilter === 'COMPLETED') {
+      return sortedAccepted.filter((o) => o.orderStatus === 'COMPLETED');
+    }
     return sortedAccepted;
   }, [sortedAccepted, statusFilter]);
 
@@ -209,13 +214,13 @@ const ShipperDashboardPage: React.FC = () => {
               const statusMeta = getStatusMeta(order.orderStatus);
               const isReady = order.orderStatus === 'READY_TO_SHIP';
               const isDelivering = ['DELIVERING', 'SHIPPED'].includes(order.orderStatus);
-              const isDone = completedIds.has(order.orderId) || order.orderStatus === 'DELIVERED';
+              const isDone = completedIds.has(order.orderId) || ['DELIVERED', 'COMPLETED'].includes(order.orderStatus);
               const started = startedIds.has(order.orderId) || isDelivering;
 
               return (
                 <tr key={order.orderId} className="group hover:bg-slate-50/60 transition-colors">
                   <td className="px-6 py-5 align-top">
-                    <div className="font-bold text-slate-900">#{order.orderId.slice(0, 8)}</div>
+                    <div className="font-bold text-slate-900">{formatOrderDisplayNameFromOrder(order)}</div>
                     <div className="mt-1 text-xs text-slate-400">{order.orderId}</div>
                   </td>
                   <td className="px-6 py-5 align-top">
@@ -371,7 +376,7 @@ const ShipperDashboardPage: React.FC = () => {
               return (
                 <tr key={order.orderId} className="group hover:bg-emerald-50/30 transition-colors">
                   <td className="px-6 py-5 align-top">
-                    <div className="font-bold text-slate-900">#{order.orderId.slice(0, 8)}</div>
+                    <div className="font-bold text-slate-900">{formatOrderDisplayNameFromOrder(order)}</div>
                     <div className="mt-1 text-xs text-slate-400">{order.orderId}</div>
                   </td>
                   <td className="px-6 py-5 align-top">
@@ -435,7 +440,7 @@ const ShipperDashboardPage: React.FC = () => {
           </thead>
           <tbody className="divide-y divide-slate-50">
             {filteredAcceptedOrders.map((order) => {
-              const done = completedIds.has(order.orderId) || order.orderStatus === 'DELIVERED';
+              const done = completedIds.has(order.orderId) || ['DELIVERED', 'COMPLETED'].includes(order.orderStatus);
               const started =
                 startedIds.has(order.orderId) || ['DELIVERING', 'SHIPPED'].includes(order.orderStatus);
               const priceAmount = getOrderCollectAmount(order);
@@ -443,7 +448,7 @@ const ShipperDashboardPage: React.FC = () => {
 
               return (
                 <tr key={order.orderId} className="group hover:bg-blue-50/30 transition-colors">
-                  <td className="px-6 py-5 align-top font-bold text-slate-900">#{order.orderId.slice(0, 8)}</td>
+                  <td className="px-6 py-5 align-top font-bold text-slate-900">{formatOrderDisplayNameFromOrder(order)}</td>
                   <td className="px-6 py-5 align-top">
                     <div className="font-semibold text-slate-800">{order.recipientName}</div>
                     <div className="mt-1 text-xs text-slate-400">{order.phoneNumber}</div>
@@ -508,7 +513,7 @@ const ShipperDashboardPage: React.FC = () => {
                 <span className="text-xs font-bold uppercase tracking-[0.2em]">Đang giao hàng</span>
               </div>
               <h3 className="mt-2 text-2xl font-black tracking-tight text-slate-900">
-                Đơn #{activeOrder.orderId.slice(0, 8)}
+                {formatOrderDisplayNameFromOrder(activeOrder)}
               </h3>
               <p className="mt-1 text-sm text-slate-500">
                 Bấm &quot;Xác nhận đã giao&quot; — bạn cần tải ảnh minh chứng bàn giao (ảnh sản phẩm, người nhận, v.v.) trước khi hệ thống ghi nhận.

@@ -40,10 +40,8 @@ export interface Order {
   totalAmount: number;
   depositAmount: number;
   items: OrderItem[];
-  comboId: string;
   comboName: string;
   comboDiscountAmount: number;
-  comboSnapshot: string;
 }
 
 export type ProcessingOrdersResponse = ApiResponse<Order[]>;

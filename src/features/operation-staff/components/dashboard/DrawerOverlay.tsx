@@ -24,6 +24,7 @@ const DrawerOverlay: React.FC<DrawerOverlayProps> = ({ isOpen, onClose, children
         className={`absolute inset-y-0 right-0 z-20 w-full md:w-[60%] bg-white dark:bg-[#1a262d] shadow-2xl flex flex-col h-full transition-all duration-300 ease-in-out border-l border-slate-200 ${
           isOpen ? 'translate-x-0' : 'translate-x-full'
         }`}
+        onClick={(e) => e.stopPropagation()}
       >
         {children}
       </div>

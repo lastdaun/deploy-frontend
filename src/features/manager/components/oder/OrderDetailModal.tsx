@@ -13,9 +13,9 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import type { ReactNode } from 'react';
 
+import { formatOrderDisplayNameFromOrder } from '@/lib/orderDisplayName';
+
 import {
-  User,
-  Phone,
   MapPin,
   Receipt,
   Calendar,
@@ -33,8 +33,10 @@ import {
   type Prescription,
 } from '../../types/order-type';
 import { fmt } from '@/lib/utils';
-import { effectivePrescriptionImageUrl, getRawPrescriptionImageSource } from '@/lib/prescriptionImageUrl';
+import { effectivePrescriptionImageUrl, getRawPrescriptionImageSource, resolvePrescriptionImageUrl } from '@/lib/prescriptionImageUrl';
+import { formatOrderCreatedAtLabel } from '@/lib/formatOrderCreatedAt';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { OrderShippingDetails } from '@/components/order/OrderShippingDetails';
 
 // ─── SUB-COMPONENT: ĐIỂM SỐ ĐO MẮT ───────────────────────────
 function PrescriptionPoint({
@@ -246,6 +248,20 @@ function ProductItemRow({ item }: { item: OrderItem }) {
   );
 }
 
+function displayCancelledByLabel(role: string | null | undefined): string {
+  const r = String(role ?? '').trim();
+  if (!r) return '—';
+  const u = r.toUpperCase();
+  const map: Record<string, string> = {
+    CUSTOMER: 'Khách hàng',
+    SALE: 'Sale',
+    ADMIN: 'Quản trị',
+    MANAGER: 'Quản lý',
+    SHIPPER: 'Vận chuyển',
+  };
+  return map[u] ?? r;
+}
+
 // ─── MAIN COMPONENT: MODAL CHI TIẾT ĐƠN HÀNG ────────────────
 export function OrderDetailModal({
   order,
@@ -264,6 +280,12 @@ export function OrderDetailModal({
     label: statusKey,
     className: 'bg-slate-100',
   };
+  const cancelReasonTrimmed = String(order.cancellationReason ?? '').trim();
+  const showCancelledOrderDetail =
+    String(order.orderStatus ?? '').toUpperCase() === 'CANCELLED';
+  const holdReasonTrimmed = String(order.operationalHoldReason ?? '').trim();
+  const showOnHoldDetail = String(order.orderStatus ?? '').toUpperCase() === 'ON_HOLD';
+  const deliveredImageSrc = resolvePrescriptionImageUrl(order.deliveredImageUrl);
 
   return (
     <Dialog open={!!order} onOpenChange={(open) => !open && onClose()}>
@@ -281,7 +303,10 @@ export function OrderDetailModal({
                 <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">
                   Mã đơn hàng
                 </span>
-                <span className="text-xs font-mono text-slate-500 font-bold">#{order.orderId}</span>
+                <span className="text-sm font-black text-slate-800 tracking-tight">
+                  {formatOrderDisplayNameFromOrder(order)}
+                </span>
+                <span className="text-[10px] font-mono text-slate-400 font-medium mt-0.5">{order.orderId}</span>
               </div>
             </div>
             <DialogTitle className="text-2xl font-black text-slate-900 mt-2 flex items-center gap-2">
@@ -297,24 +322,17 @@ export function OrderDetailModal({
         <ScrollArea className="max-h-[75vh]">
           <div className="p-8 space-y-10">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              {/* Cột 1: Thông tin khách hàng */}
+              {/* Cột 1: Giao hàng & liên hệ khách */}
               <div className="space-y-4">
                 <div className="flex items-center gap-2 text-slate-900 font-black uppercase tracking-widest text-[11px]">
-                  <User size={16} className="text-blue-600" /> Khách hàng
+                  <MapPin size={16} className="text-blue-600" /> Thông tin giao hàng
                 </div>
-                <div className="bg-white border rounded-[1.5rem] p-5 space-y-3 shadow-sm">
-                  <p className="text-slate-900 font-black text-base">
-                    {order.recipientName || 'Ẩn danh'}
-                  </p>
-                  <div className="space-y-2">
-                    <p className="text-sm flex items-center gap-2 text-slate-500 font-medium">
-                      <Phone size={14} className="text-slate-300" /> {order.phoneNumber}
-                    </p>
-                    <p className="text-sm flex items-start gap-2 text-slate-500 font-medium leading-relaxed">
-                      <MapPin size={14} className="text-slate-300 shrink-0 mt-1" />{' '}
-                      {order.deliveryAddress}
-                    </p>
-                  </div>
+                <div className="bg-white border rounded-[1.5rem] p-5 shadow-sm">
+                  <OrderShippingDetails
+                    recipientName={order.recipientName}
+                    phoneNumber={order.phoneNumber}
+                    deliveryAddress={order.deliveryAddress}
+                  />
                 </div>
               </div>
 
@@ -335,7 +353,7 @@ export function OrderDetailModal({
                       <span className="text-[10px] text-emerald-400 font-black uppercase">
                         Đã thanh toán
                       </span>
-                      <span className="text-emerald-400 font-bold">-{fmt(order.paidAmount)}</span>
+                      <span className="text-emerald-400 font-bold">{fmt(order.paidAmount)}</span>
                     </div>
                     <Separator className="bg-white/10" />
                     <div className="flex justify-between items-center pt-1">
@@ -352,6 +370,21 @@ export function OrderDetailModal({
             </div>
 
             {/* Row: Danh sách sản phẩm */}
+            {deliveredImageSrc ? (
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 text-slate-900 font-black uppercase tracking-widest text-[11px]">
+                  <ImageIcon size={16} className="text-emerald-600" /> Ảnh xác nhận giao hàng
+                </div>
+                <a href={deliveredImageSrc} target="_blank" rel="noreferrer" className="block">
+                  <img
+                    src={deliveredImageSrc}
+                    alt="Ảnh xác nhận giao hàng"
+                    className="max-h-80 w-full rounded-[1.25rem] border border-emerald-100 bg-slate-50 object-contain"
+                  />
+                </a>
+              </div>
+            ) : null}
+
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-slate-900 font-black uppercase tracking-widest text-[11px]">
@@ -367,6 +400,48 @@ export function OrderDetailModal({
                 ))}
               </div>
             </div>
+
+            {showOnHoldDetail ? (
+              <div className="rounded-[1.25rem] border border-amber-200 bg-amber-50/80 p-5 space-y-3">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-amber-800 mb-1.5">
+                    Lý do tạm giữ (vận hành)
+                  </p>
+                  <p className="text-sm text-slate-800 font-medium leading-relaxed whitespace-pre-wrap">
+                    {holdReasonTrimmed || '—'}
+                  </p>
+                </div>
+              </div>
+            ) : null}
+
+            {showCancelledOrderDetail ? (
+              <div className="rounded-[1.25rem] border border-rose-100 bg-rose-50/70 p-5 space-y-4">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-rose-700 mb-1.5">
+                    Lý do huỷ
+                  </p>
+                  <p className="text-sm text-slate-800 font-medium leading-relaxed whitespace-pre-wrap">
+                    {cancelReasonTrimmed || '—'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-rose-700 mb-1.5">
+                    Huỷ bởi
+                  </p>
+                  <p className="text-sm text-slate-800 font-medium">
+                    {displayCancelledByLabel(order.cancelledBy)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-rose-700 mb-1.5">
+                    Huỷ lúc
+                  </p>
+                  <p className="text-sm text-slate-800 font-medium tabular-nums">
+                    {formatOrderCreatedAtLabel(order.cancelledAt)}
+                  </p>
+                </div>
+              </div>
+            ) : null}
           </div>
         </ScrollArea>
 

@@ -1,9 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
 import { useOrders } from '@/features/manager/hooks/useOrders';
-import { orderApi } from '@/features/manager/api/order-api';
 import { fmt } from '@/lib/utils';
 import { Loader2, Package, ChevronLeft, ChevronRight, Eye } from 'lucide-react';
 import { STATUS_CONFIG, type Order } from '../../types/order-type';
@@ -11,7 +9,6 @@ import { OrderDetailModal } from '../../components/oder/OrderDetailModal';
 
 // ─── SHADCN UI IMPORTS ──────────────────────────────────────
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import {
   Select,
   SelectContent,
@@ -19,8 +16,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { toast } from 'sonner';
-import { sortOrdersByCreatedAtDesc } from '@/lib/orderSort';
+import { sortOrdersByCreatedAtDesc, ORDER_LIST_SORT_HINT_NEWEST_FIRST } from '@/lib/orderSort';
+import { formatOrderDisplayNameFromOrder } from '@/lib/orderDisplayName';
+import { formatOrderCreatedAtLabel } from '@/lib/formatOrderCreatedAt';
+import {
+  MANAGEMENT_ORDER_LIST_VISIBLE_STATUSES,
+  MANAGEMENT_ORDER_STATUS_FILTER_OPTIONS,
+} from '@/features/manager/constants/managementOrderList';
 
 // ─── COMPONENTS ─────────────────────────────────────────────
 
@@ -45,7 +47,6 @@ function StatusBadge({ status }: { status: string }) {
 // ─── PAGE ───────────────────────────────────────────────────
 
 export default function ManagerOrderPage() {
-  const queryClient = useQueryClient();
   const [queryParams, setQueryParams] = useState({
     page: 0,
     size: 10,
@@ -54,38 +55,8 @@ export default function ManagerOrderPage() {
     sortBy: 'createdAt',
   });
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
-  const [actionLoading, setActionLoading] = useState(false);
 
-  const MANAGER_VISIBLE_STATUSES = new Set([
-    'PENDING',
-    'PAID',
-    'CONFIRMED',
-    'PREORDER_CONFIRMED',
-    'CANCELLED',
-    'READY_TO_SHIP',
-    'DELIVERING',
-    'DELIVERED',
-    'STOCK_REQUESTED',
-    'STOCK_READY',
-    'IN_PRODUCTION',
-    'PROCESSING',
-    'PREPARING',
-    'PRODUCED',
-  ]);
-
-  const MANAGER_FILTER_OPTIONS: { value: string; label: string; dot: string }[] = [
-    { value: 'PENDING', label: 'Chờ xác nhận', dot: STATUS_CONFIG.PENDING.dot },
-    { value: 'PAID', label: 'Đã thanh toán', dot: STATUS_CONFIG.PAID.dot },
-    { value: 'CONFIRMED', label: 'Đã xác nhận', dot: STATUS_CONFIG.CONFIRMED.dot },
-    { value: 'PREORDER_CONFIRMED', label: 'Đã xác nhận preorder', dot: STATUS_CONFIG.PREORDER_CONFIRMED.dot },
-    { value: 'PROCESSING', label: 'Đang xử lý đơn hàng', dot: STATUS_CONFIG.PROCESSING.dot },
-    { value: 'READY_TO_SHIP', label: 'Sẵn sàng vận chuyển', dot: STATUS_CONFIG.READY_TO_SHIP.dot },
-    { value: 'DELIVERING', label: 'Đang giao hàng', dot: STATUS_CONFIG.DELIVERING.dot },
-    { value: 'DELIVERED', label: 'Đã giao hàng', dot: STATUS_CONFIG.DELIVERED.dot },
-    { value: 'CANCELLED', label: 'Đã hủy', dot: STATUS_CONFIG.CANCELLED.dot },
-  ];
-
-  const { orders: rawOrders, totalPages, loading } = useOrders({
+  const { orders: rawOrders, totalPages, loading, totalElements } = useOrders({
     page: queryParams.page,
     size: queryParams.size,
     status: queryParams.status === 'ALL' ? undefined : queryParams.status,
@@ -95,7 +66,7 @@ export default function ManagerOrderPage() {
 
   const orders = useMemo(
     () =>
-      sortOrdersByCreatedAtDesc(rawOrders.filter((o) => MANAGER_VISIBLE_STATUSES.has(o.orderStatus))),
+      sortOrdersByCreatedAtDesc(rawOrders.filter((o) => MANAGEMENT_ORDER_LIST_VISIBLE_STATUSES.has(o.orderStatus))),
     [rawOrders],
   );
 
@@ -119,8 +90,9 @@ export default function ManagerOrderPage() {
                 Quản lý đơn hàng
               </h1>
             </div>
-            <p className="text-slate-500 font-medium text-sm">
-              Quản lý và theo dõi tiến độ đơn hàng hệ thống
+            <p className="text-slate-500 font-medium text-sm">{ORDER_LIST_SORT_HINT_NEWEST_FIRST}</p>
+            <p className="text-slate-400 text-xs mt-1 font-medium">
+              Tổng {totalElements} đơn theo bộ lọc · trang {queryParams.page + 1}/{Math.max(1, totalPages || 1)}
             </p>
           </div>
 
@@ -141,7 +113,7 @@ export default function ManagerOrderPage() {
                   Tất cả trạng thái
                 </SelectItem>
                 <div className="h-px bg-slate-100 my-1 mx-2" />
-                {MANAGER_FILTER_OPTIONS.map((opt) => (
+                {MANAGEMENT_ORDER_STATUS_FILTER_OPTIONS.map((opt) => (
                   <SelectItem 
                     key={opt.value} 
                     value={opt.value}
@@ -163,8 +135,11 @@ export default function ManagerOrderPage() {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-slate-50/50 border-b border-slate-100">
-                  <th className="pl-8 pr-4 py-5 text-[11px] font-bold text-slate-400 uppercase tracking-widest">
-                    Mã đơn
+                  <th className="pl-8 pr-4 py-5 text-[11px] font-bold text-slate-400 uppercase tracking-widest min-w-[220px]">
+                    Tên đơn hàng
+                  </th>
+                  <th className="px-4 py-5 text-[11px] font-bold text-slate-400 uppercase tracking-widest whitespace-nowrap">
+                    Ngày tạo
                   </th>
                   <th className="px-4 py-5 text-[11px] font-bold text-slate-400 uppercase tracking-widest">
                     Khách hàng
@@ -182,14 +157,24 @@ export default function ManagerOrderPage() {
               <tbody
                 className={`divide-y divide-slate-50 transition-opacity duration-300 ${loading ? 'opacity-40' : 'opacity-100'}`}
               >
-                {orders.map((o) => (
+                {orders.length === 0 && !loading ? (
+                  <tr>
+                    <td colSpan={6} className="py-20 text-center text-slate-400 font-medium">
+                      Không có đơn hàng trong bộ lọc này
+                    </td>
+                  </tr>
+                ) : (
+                  orders.map((o) => (
                   <tr
                     key={o.orderId}
                     className="group hover:bg-blue-50/30 transition-colors cursor-pointer"
                     onClick={() => setSelectedOrder(o)}
                   >
-                    <td className="pl-8 pr-4 py-5 font-bold text-slate-900 text-sm">
-                      #{o.orderId.slice(0, 8)}
+                    <td className="pl-8 pr-4 py-5 font-semibold text-slate-900 text-sm leading-snug max-w-[min(28rem,40vw)]">
+                      {formatOrderDisplayNameFromOrder(o)}
+                    </td>
+                    <td className="px-4 py-5 text-sm text-slate-600 whitespace-nowrap tabular-nums">
+                      {formatOrderCreatedAtLabel(o.createdAt)}
                     </td>
                     <td className="px-4 py-5">
                       <div className="font-bold text-slate-700 text-sm">
@@ -197,7 +182,7 @@ export default function ManagerOrderPage() {
                       </div>
                       <div className="text-xs text-slate-400 font-medium mt-0.5">{o.phoneNumber}</div>
                     </td>
-                    <td className="px-4 py-5 text-right font-black text-slate-900 text-sm">
+                    <td className="px-4 py-5 text-right font-black text-slate-900 text-sm tabular-nums">
                       {fmt(o.totalAmount)}
                     </td>
                     <td className="px-4 py-5 text-center">
@@ -209,7 +194,8 @@ export default function ManagerOrderPage() {
                       </div>
                     </td>
                   </tr>
-                ))}
+                  ))
+                )}
               </tbody>
             </table>
           </div>

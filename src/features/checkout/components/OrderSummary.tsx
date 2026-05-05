@@ -43,7 +43,6 @@ export const OrderSummary = ({ step, onContinue, onBack }: OrderSummaryProps) =>
         <div className="max-h-[300px] overflow-y-auto pr-1 space-y-4 scrollbar-thin">
           {items.map((item, index) => {
             const itemDetail = result?.itemRequirements[index];
-            const itemPayPercent = itemDetail ? Math.round(itemDetail.paymentPercentage * 100) : 0;
 
             return (
               <div key={item.id} className="flex gap-4 group">
@@ -82,16 +81,7 @@ export const OrderSummary = ({ step, onContinue, onBack }: OrderSummaryProps) =>
                       </div>
                     )}
 
-                    {itemDetail && (
-                      <div className="flex justify-between py-1 px-2 bg-gray-50 rounded border border-dashed border-gray-200 mt-1.5 text-[10px]">
-                        <span className="font-medium text-gray-600">
-                          Thanh toán ({itemPayPercent}%):
-                        </span>
-                        <span className="font-black text-[#1e2575]">
-                          {itemDetail.requiredPayment.toLocaleString()}₫
-                        </span>
-                      </div>
-                    )}
+                    
                   </div>
                 </div>
               </div>

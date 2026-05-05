@@ -24,4 +24,17 @@ export const paymentApi = {
       .then((res) => res.data),
   getOrderDetails: async (orderId: string) =>
     await api.get<OrderDetailsResponse>(`/orders/${orderId}`).then((res) => res.data),
+
+  uploadPrescriptionImage: async (orderItemId: string, file: File | Blob, fileName?: string) => {
+    const formData = new FormData();
+    if (file instanceof File) {
+      formData.append('prescriptionImage', file, file.name);
+    } else {
+      formData.append('prescriptionImage', file, fileName ?? 'prescription.jpg');
+    }
+
+    return await api
+      .put(`/orders/items/${orderItemId}/prescription-image`, formData)
+      .then((res) => res.data);
+  },
 };

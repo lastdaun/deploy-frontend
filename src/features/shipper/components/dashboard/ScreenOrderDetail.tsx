@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { BEOrder } from '@/features/operation-staff/types/types';
 import { MapPin, Phone, StickyNote, Banknote, User, Package } from 'lucide-react';
+import { formatOrderDisplayNameFromOrder } from '@/lib/orderDisplayName';
 import { useSidebar } from '@/features/shipper/hooks/useSidebar.ts';
 import { getOrderCollectAmount } from '@/features/shipper/utils/order-money';
 
@@ -49,7 +50,8 @@ export function ScreenOrderDetail({ order, onBack, onComplete }: Props) {
       {/* Header */}
       <header className="bg-primary px-4 py-4">
         <p className="text-sm text-primary-foreground/80">Đang giao hàng</p>
-        <h1 className="text-xl font-bold text-primary-foreground">Đơn {order.orderId}</h1>
+        <h1 className="text-xl font-bold text-primary-foreground">{formatOrderDisplayNameFromOrder(order)}</h1>
+        <p className="text-xs font-mono text-primary-foreground/70 mt-1 break-all">{order.orderId}</p>
       </header>
 
       {/* Content */}

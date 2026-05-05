@@ -13,7 +13,10 @@ import { useProductionStore } from '@/features/operation-staff/store/productionS
 import { sortOrdersByCreatedAtDesc } from '@/lib/orderSort';
 
 const ITEMS_PER_PAGE = 10;
-type StatusFilterKey = 'CONFIRMED' | 'PROCESSING' | 'READY_TO_SHIP';
+type StatusFilterKey =
+  | 'CONFIRMED'
+  | 'PROCESSING'
+  | 'READY_TO_SHIP';
 
 type StatusFilterOption = {
   id: StatusFilterKey;
@@ -184,6 +187,7 @@ const OrdersSection: React.FC<OrdersSectionProps> = ({
             Vui lòng chờ trong giây lát
           </p>
         </div>
+        <OrderProcessingDrawer />
       </section>
     );
   }
@@ -227,6 +231,7 @@ const OrdersSection: React.FC<OrdersSectionProps> = ({
             Thử lại
           </button>
         </div>
+        <OrderProcessingDrawer />
       </section>
     );
   }
@@ -258,6 +263,7 @@ const OrdersSection: React.FC<OrdersSectionProps> = ({
             Không có đơn hàng nào khớp với từ khóa tìm kiếm của bạn.
           </p>
         </div>
+        <OrderProcessingDrawer />
       </section>
     );
   }

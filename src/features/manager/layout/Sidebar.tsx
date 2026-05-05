@@ -1,5 +1,6 @@
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
+  LayoutDashboard,
   Package,
   ShoppingCart,
   LogOut,
@@ -14,6 +15,7 @@ import { useAuthStore } from '@/features/auth/stores/useAuthStore';
 import { UserAvatar } from '@/components/ui/UserAvatar';
 
 const navigation = [
+  { name: 'Tổng quan', href: '/manager/dashboard', icon: LayoutDashboard },
   { name: 'Sản phẩm', href: '/manager/products', icon: Package },
   { name: 'Đơn hàng', href: '/manager/orders', icon: ShoppingCart },
   { name: 'Tròng kính', href: '/manager/lenses', icon: Glasses },
@@ -56,7 +58,9 @@ export function Sidebar() {
       {/* Navigation */}
       <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
         {navigation.map((item) => {
-          const isActive = location.pathname === item.href;
+          const isActive =
+            location.pathname === item.href ||
+            (item.href === '/manager/dashboard' && location.pathname === '/manager');
           return (
             <NavLink
               key={item.name}

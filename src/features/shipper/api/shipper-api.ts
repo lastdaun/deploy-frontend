@@ -10,7 +10,7 @@ export const shipperApi = {
       },
     });
 
-    return response.data.result?.items || [];
+    return response.data.result?.items || response.data.result?.content || [];
   },
 
   acceptOrders: async (orderIds: string[]): Promise<void> => {
@@ -18,14 +18,16 @@ export const shipperApi = {
   },
 
   getMyAcceptedOrders: async (): Promise<BEOrder[]> => {
-    const [deliveringRes, deliveredRes] = await Promise.all([
+    const [deliveringRes, deliveredRes, completedRes] = await Promise.all([
       api.get('/management/orders', { params: { status: 'DELIVERING', size: 10000 } }),
       api.get('/management/orders', { params: { status: 'DELIVERED', size: 10000 } }),
+      api.get('/management/orders', { params: { status: 'COMPLETED', size: 10000 } }),
     ]);
 
-    const delivering: BEOrder[] = deliveringRes.data.result?.items || [];
-    const delivered: BEOrder[] = deliveredRes.data.result?.items || [];
-    return [...delivering, ...delivered];
+    const delivering: BEOrder[] = deliveringRes.data.result?.items || deliveringRes.data.result?.content || [];
+    const delivered: BEOrder[] = deliveredRes.data.result?.items || deliveredRes.data.result?.content || [];
+    const completed: BEOrder[] = completedRes.data.result?.items || completedRes.data.result?.content || [];
+    return [...delivering, ...delivered, ...completed];
   },
 
   startDelivery: async (orderId: string): Promise<void> => {
@@ -33,12 +35,11 @@ export const shipperApi = {
   },
 
   /**
-   * Xác nhận đã giao — gửi kèm ảnh minh chứng (multipart, part name `file`).
-   * Backend cần nhận: PATCH multipart với @RequestParam("file") MultipartFile hoặc tương đương.
+   * Xác nhận đã giao — gửi kèm một ảnh minh chứng (multipart, part name `image`).
    */
   confirmDelivered: async (orderId: string, deliveryProof: File): Promise<void> => {
     const formData = new FormData();
-    formData.append('file', deliveryProof);
+    formData.append('image', deliveryProof);
     await api.patch(`/management/orders/${orderId}/confirm-delivered`, formData);
   },
 };

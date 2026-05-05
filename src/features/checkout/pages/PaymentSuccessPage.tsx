@@ -3,6 +3,7 @@ import { Check, ArrowRight, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { useOrderSuccess } from '../store/useOrderSuccess';
+import { formatOrderDisplayNameFromOrder } from '@/lib/orderDisplayName';
 
 export const PaymentSuccessPage = () => {
   const { orderId, email, deliveryDate, isLoading, orderData } = useOrderSuccess();
@@ -40,6 +41,21 @@ export const PaymentSuccessPage = () => {
           </p>
 
           <div className="bg-gray-50 rounded-xl p-6 mb-8 text-left grid grid-cols-2 gap-6">
+            <div className="col-span-2">
+              <span className="block text-xs font-extrabold text-gray-400 uppercase tracking-widest mb-1">
+                Tên đơn hàng
+              </span>
+              <span className="block text-sm font-bold text-gray-900 leading-snug">
+                {orderData?.orderId
+                  ? formatOrderDisplayNameFromOrder({
+                      orderId: orderData.orderId,
+                      orderName: orderData.orderName,
+                      comboName: orderData.comboName,
+                      items: orderData.items,
+                    })
+                  : formatOrderDisplayNameFromOrder({ orderId })}
+              </span>
+            </div>
             <div>
               <span className="block text-xs font-extrabold text-gray-400 uppercase tracking-widest mb-1">
                 Mã đơn hàng

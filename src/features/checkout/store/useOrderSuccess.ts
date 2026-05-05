@@ -4,29 +4,37 @@ import { useSearchParams } from 'react-router-dom';
 import { useCheckoutStore } from './useCheckoutStore';
 import type { OrderDetailsData } from '../type/type'; // Đổi đường dẫn type
 import { paymentApi } from '../api/checkout-api';
+import { profileApi } from '@/features/profile/api/api';
+import { useAuthStore } from '@/features/auth/stores/useAuthStore';
 
 export const useOrderSuccess = () => {
   const [searchParams] = useSearchParams();
   const clearCart = useCartStore((state) => state.clearCart);
   const resetCheckout = useCheckoutStore((state) => state.resetCheckout);
+  const authEmail = useAuthStore((state) => state.user?.email);
 
   // Thêm state để quản lý loading và data
   const [isLoading, setIsLoading] = useState(true);
   const [orderData, setOrderData] = useState<OrderDetailsData | null>(null);
+  const [profileEmail, setProfileEmail] = useState<string | null>(null);
 
   // Lấy dữ liệu từ URL
   const orderId = searchParams.get('orderId') || '#UNKNOWN';
-  const email = searchParams.get('email') || 'customer@example.com';
+  const email = searchParams.get('email') || orderData?.customerEmail || profileEmail || authEmail || '';
 
   useEffect(() => {
     const fetchOrderDetails = async () => {
       try {
         setIsLoading(true);
         // Gọi API lấy thông tin đơn hàng
-        const data = await paymentApi.getOrderDetails(orderId);
+        const [data, profile] = await Promise.all([
+          paymentApi.getOrderDetails(orderId),
+          profileApi.getProfile().catch(() => null),
+        ]);
         if (data?.result) {
           setOrderData(data.result);
         }
+        setProfileEmail(profile?.email || null);
       } catch (error) {
         console.error('Lỗi khi lấy thông tin đơn hàng:', error);
       } finally {

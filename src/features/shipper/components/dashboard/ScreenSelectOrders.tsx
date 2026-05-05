@@ -1,5 +1,6 @@
 import type { BEOrder } from '@/features/operation-staff/types/types';
 import { Package, Truck, ArrowRight } from 'lucide-react';
+import { formatOrderDisplayNameFromOrder } from '@/lib/orderDisplayName';
 import { useSidebar } from '@/features/shipper/hooks/useSidebar.ts';
 
 interface Props {
@@ -85,8 +86,13 @@ export function ScreenSelectOrders({
 
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="font-semibold text-foreground">Mã đơn: {order.orderId}</span>
+                    <span className="font-semibold text-foreground">
+                      {formatOrderDisplayNameFromOrder(order)}
+                    </span>
                   </div>
+                  <p className="text-[10px] font-mono text-muted-foreground/80 truncate" title={order.orderId}>
+                    {order.orderId}
+                  </p>
                   <p className="mt-1 text-sm text-muted-foreground truncate">
                     Người nhận: {order.recipientName}
                   </p>
